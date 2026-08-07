@@ -1,6 +1,7 @@
 # GyMax
-
 بک‌اند سامانه مدیریت باشگاه GyMax با Go و PostgreSQL. این نسخه شامل مدیریت کاربران و نقش‌ها، ثبت باشگاه، عضویت ورزشکار و زیرساخت تأیید شماره موبایل است.
+
+GyMax is a gym-management platform built for coaches and athletes.
 
 ## اجرا
 
