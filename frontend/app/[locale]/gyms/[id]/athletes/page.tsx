@@ -1,0 +1,8 @@
+"use client";
+import Link from "next/link";
+import {use,useEffect,useState} from "react";
+import {useRouter} from "next/navigation";
+import "../../../../catalog.css";
+const API=process.env.NEXT_PUBLIC_API_URL!;
+type Athlete={id:string;first_name:string;last_name:string;phone?:string;registered_at:string};
+export default function GymAthletes({params}:{params:Promise<{locale:string;id:string}>}){const{locale,id}=use(params),router=useRouter();const[items,setItems]=useState<Athlete[]>([]),[error,setError]=useState("");useEffect(()=>{const token=localStorage.getItem("gymax_access_token")||"";fetch(`${API}/v1/gyms/${id}/athletes`,{headers:{Authorization:`Bearer ${token}`}}).then(async response=>{if(response.status===401||response.status===403){router.replace(`/${locale}/login`);return}const data=await response.json();if(!response.ok)throw new Error(data.message);setItems(data||[])}).catch(reason=>setError(reason instanceof Error?reason.message:"دریافت ورزشکاران انجام نشد."))},[id,locale,router]);return <main className="catalog-page"><header><Link href={`/${locale}/gyms`}>بازگشت به باشگاه‌های من ←</Link></header><section className="wallet-ledger"><h1>ورزشکاران ثبت‌نام‌شده</h1>{error&&<div className="alert">{error}</div>}<div className="ledger-table"><div className="ledger-row ledger-title"><span>نام ورزشکار</span><span>شماره موبایل</span><span>تاریخ ثبت‌نام</span><span>وضعیت</span></div>{items.map(item=><div className="ledger-row" key={item.id}><b>{item.first_name} {item.last_name}</b><span dir="ltr">{item.phone||"—"}</span><time>{new Date(item.registered_at).toLocaleDateString("fa-IR")}</time><strong className="credit">عضو باشگاه</strong></div>)}{!items.length&&!error&&<p>هنوز ورزشکاری در این باشگاه ثبت‌نام نکرده است.</p>}</div></section></main>}

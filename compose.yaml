@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${GYMAX_DATABASE_NAME}
+      POSTGRES_USER: ${GYMAX_DATABASE_USER}
+      POSTGRES_PASSWORD: ${GYMAX_DATABASE_PASSWORD}
+    ports:
+      - "${GYMAX_SERVER_IP}:${GYMAX_DATABASE_PORT}:5432"
+    volumes:
+      - gymax_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GYMAX_DATABASE_USER} -d ${GYMAX_DATABASE_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  gymax_postgres_data:

@@ -1,0 +1,24 @@
+{
+  "name": "gymax-web",
+  "private": true,
+  "scripts": {
+    "dev": "bash ./scripts/next-with-config.sh dev",
+    "build": "bash ./scripts/next-with-config.sh build",
+    "start": "bash ./scripts/next-with-config.sh start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@fontsource/vazirmatn": "^5.2.6",
+    "jalaali-js": "^1.2.8",
+    "next": "15.5.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "@types/react": "19.1.2",
+    "@types/react-dom": "19.1.2",
+    "prettier": "3.9.6",
+    "typescript": "5.8.3"
+  }
+}

@@ -1,0 +1,58 @@
+package main
+
+import (
+	"context"
+	"github.com/gymax/gymax/internal/config"
+	"github.com/gymax/gymax/internal/handler"
+	"github.com/gymax/gymax/internal/repository/postgres"
+	"github.com/gymax/gymax/internal/service"
+	"github.com/gymax/gymax/migrations"
+	"log"
+	"net/http"
+	"os"
+	"time"
+)
+
+type logNotifier struct{}
+
+func (logNotifier) Send(_ context.Context, phone, code string) error {
+	log.Printf("development OTP phone=%s code=%s", phone, code)
+	return nil
+}
+func main() {
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
+	ctx := context.Background()
+	if len(cfg.JWTSecret) < 32 {
+		log.Fatal("JWT_SECRET must be at least 32 characters")
+	}
+	store, err := postgres.New(ctx, cfg.DatabaseURL())
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer store.DB.Close()
+	if err = migrations.Apply(ctx, store); err != nil {
+		log.Fatalf("database migration failed: %v", err)
+	}
+	users := service.NewUserService(store, postgres.OTPStore{Store: store}, store, logNotifier{}, cfg.OTPPepper)
+	gyms := service.NewGymService(postgres.GymStore{Store: store}, store)
+	finance := service.NewFinanceService(store, store)
+	messages := service.NewMessageService(postgres.MessageStore{Store: store}, store)
+	bootstrapAdmin(ctx, users)
+	srv := &http.Server{Addr: cfg.BackendAddress(), Handler: handler.New(users, gyms, finance, messages, cfg.JWTSecret, cfg.FrontendOrigin(), cfg.UploadDir), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
+	log.Printf("GyMax API listening on %s", srv.Addr)
+	log.Fatal(srv.ListenAndServe())
+}
+
+func bootstrapAdmin(ctx context.Context, s *service.UserService) {
+	name, user, pass := os.Getenv("GYMAX_ADMIN_NAME"), os.Getenv("GYMAX_ADMIN_USERNAME"), os.Getenv("GYMAX_ADMIN_PASSWORD")
+	if name == "" || user == "" || pass == "" {
+		log.Print("admin bootstrap skipped: administrator settings are missing from gymax.env")
+		return
+	}
+	if _, e := s.CreateAdmin(ctx, name, user, pass); e != nil {
+		log.Printf("admin bootstrap: %v", e)
+	}
+}

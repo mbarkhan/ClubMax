@@ -1,0 +1,11 @@
+"use client";
+
+import Link from "next/link";
+import {useEffect,useState} from "react";
+import {useParams,useRouter} from "next/navigation";
+import "../../catalog.css";
+
+const API=process.env.NEXT_PUBLIC_API_URL!;
+type Entry={id:string;type:string;amount:number;description:string;reference_type:string;created_at:string};
+const labels:Record<string,string>={tuition_credit:"واریز شهریه",withdrawal_hold:"رزرو برداشت",withdrawal_release:"بازگشت برداشت",withdrawal_fee:"کارمزد برداشت"};
+export default function Wallet(){const{locale}=useParams<{locale:string}>(),router=useRouter();const[balance,setBalance]=useState(0),[entries,setEntries]=useState<Entry[]>([]),[error,setError]=useState("");useEffect(()=>{const token=localStorage.getItem("gymax_access_token")||"",headers={Authorization:`Bearer ${token}`};Promise.all([fetch(`${API}/v1/wallet`,{headers}),fetch(`${API}/v1/wallet/ledger`,{headers})]).then(async([wallet,ledger])=>{if(wallet.status===401||wallet.status===403){router.replace(`/${locale}/login`);return}const walletData=await wallet.json(),ledgerData=await ledger.json();if(!wallet.ok)throw new Error(walletData.message);setBalance(Number(walletData.balance||0));setEntries(ledgerData||[])}).catch(reason=>setError(reason instanceof Error?reason.message:"دریافت کیف پول انجام نشد."))},[locale,router]);return <main className="catalog-page"><header><Link href={`/${locale}/dashboard`}>بازگشت به داشبورد ←</Link></header><section className="wallet-head"><span>موجودی قابل برداشت</span><strong>{balance.toLocaleString("fa-IR")} ریال</strong></section><section className="wallet-ledger"><h1>تراکنش‌های کیف پول</h1>{error&&<div className="alert">{error}</div>}<div className="ledger-table"><div className="ledger-row ledger-title"><span>نوع</span><span>شرح</span><span>تاریخ</span><span>مبلغ</span></div>{entries.map(entry=><div className="ledger-row" key={entry.id}><b>{labels[entry.type]||entry.type}</b><span>{entry.description}</span><time>{new Date(entry.created_at).toLocaleDateString("fa-IR")}</time><strong className={entry.amount>0?"credit":"debit"}>{entry.amount.toLocaleString("fa-IR")} ریال</strong></div>)}{!entries.length&&!error&&<p>هنوز تراکنشی ثبت نشده است.</p>}</div></section></main>}

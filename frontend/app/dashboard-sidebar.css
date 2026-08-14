@@ -1,0 +1,2 @@
+.mobile-dashboard-links{display:none}
+@media(max-width:750px){.mobile-dashboard-links{display:flex;align-items:center;gap:5px;margin-right:auto}.mobile-dashboard-links a{padding:7px 9px;border-radius:8px;color:#b9cbc4;font-size:12px}.mobile-dashboard-links a.active{background:#ffffff14;color:#d9f67d}}
