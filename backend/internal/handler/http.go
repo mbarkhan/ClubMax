@@ -89,6 +89,7 @@ func New(u *service.UserService, c *service.GymService, f *service.FinanceServic
 			r.Delete("/gyms/{id}/images/{imageID}", a.deleteGymImage)
 			r.With(requireRole(domain.RoleCoach, domain.RoleAdmin)).Post("/gyms/{id}/athletes/{athleteID}", a.addAthlete)
 			r.With(requireRole(domain.RoleCoach, domain.RoleAdmin)).Get("/gyms/{id}/athletes", a.gymAthletes)
+			r.With(requireRole(domain.RoleCoach)).Get("/gyms/{id}/athletes/{athleteID}/payments", a.gymAthletePayments)
 			r.Get("/messages", a.inbox)
 			r.Post("/messages", a.sendMessage)
 			r.Put("/messages/{id}/read", a.markMessageRead)
@@ -502,6 +503,10 @@ func (a *API) addAthlete(w http.ResponseWriter, r *http.Request) {
 func (a *API) gymAthletes(w http.ResponseWriter, r *http.Request) {
 	v, e := a.gyms.Athletes(r.Context(), chi.URLParam(r, "id"), current(r))
 	respond(w, e, 200, v)
+}
+func (a *API) gymAthletePayments(w http.ResponseWriter, r *http.Request) {
+	payments, e := a.finance.GymAthletePayments(r.Context(), current(r).ID, chi.URLParam(r, "id"), chi.URLParam(r, "athleteID"))
+	respond(w, e, http.StatusOK, payments)
 }
 func (a *API) payMonthlyTuition(w http.ResponseWriter, r *http.Request) {
 	payment, e := a.finance.PayMonthlyTuition(r.Context(), current(r).ID, chi.URLParam(r, "id"))

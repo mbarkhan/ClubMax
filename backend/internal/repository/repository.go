@@ -40,7 +40,7 @@ type GymRepository interface {
 	CountByCoach(context.Context, string) (int, error)
 	Delete(context.Context, string) error
 	AddAthlete(context.Context, *domain.GymAthlete) error
-	ListGymAthletes(context.Context, string) ([]domain.GymAthleteProfile, error)
+	ListGymAthletes(context.Context, string, int, int) ([]domain.GymAthleteProfile, error)
 	RemoveAthlete(context.Context, string, string) error
 	AddGymImage(context.Context, *domain.GymImage) error
 	GetGymImage(context.Context, string) (*domain.GymImage, error)
@@ -75,4 +75,5 @@ type WalletRepository interface {
 	PayTuition(context.Context, *domain.TuitionPayment) error
 	PayMonthlyTuition(context.Context, string, string, int, int, string, time.Time) (*domain.MonthlyTuitionPayment, error)
 	ListAthletePayments(context.Context, string) ([]domain.AthletePayment, error)
+	ListGymAthletePayments(context.Context, string, string) ([]domain.AthletePayment, error)
 }

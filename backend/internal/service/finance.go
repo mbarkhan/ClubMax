@@ -15,11 +15,12 @@ const defaultWithdrawalFeeBPS int64 = 200 // 2.00%
 type FinanceService struct {
 	wallet repository.WalletRepository
 	users  repository.UserRepository
+	gyms   repository.GymRepository
 	now    func() time.Time
 }
 
-func NewFinanceService(w repository.WalletRepository, u repository.UserRepository) *FinanceService {
-	return &FinanceService{wallet: w, users: u, now: time.Now}
+func NewFinanceService(w repository.WalletRepository, u repository.UserRepository, g repository.GymRepository) *FinanceService {
+	return &FinanceService{wallet: w, users: u, gyms: g, now: time.Now}
 }
 
 func (s *FinanceService) RequestWithdrawal(ctx context.Context, coachID string, gross int64) (*domain.WithdrawalRequest, error) {
@@ -150,6 +151,23 @@ func (s *FinanceService) AthletePayments(ctx context.Context, athleteID string) 
 		return nil, domain.ErrForbidden
 	}
 	return s.wallet.ListAthletePayments(ctx, athleteID)
+}
+func (s *FinanceService) GymAthletePayments(ctx context.Context, coachID, gymID, athleteID string) ([]domain.AthletePayment, error) {
+	gym, e := s.gyms.GetByID(ctx, gymID)
+	if e != nil {
+		return nil, e
+	}
+	if gym.CoachID != coachID {
+		return nil, domain.ErrForbidden
+	}
+	athlete, e := s.users.GetByID(ctx, athleteID)
+	if e != nil {
+		return nil, e
+	}
+	if athlete.Role != domain.RoleAthlete {
+		return nil, domain.ErrInvalid
+	}
+	return s.wallet.ListGymAthletePayments(ctx, gymID, athleteID)
 }
 func (s *FinanceService) Withdrawals(ctx context.Context, actor *domain.User, limit, offset int) ([]domain.WithdrawalRequest, error) {
 	if actor.Role == domain.RoleAdmin {

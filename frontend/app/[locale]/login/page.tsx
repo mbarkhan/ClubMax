@@ -5,6 +5,7 @@ import SiteLogo from "../../components/SiteLogo";
 import { FormEvent, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import PasswordField from "../../components/PasswordField";
+import "../../auth.css";
 
 const API = process.env.NEXT_PUBLIC_API_URL!;
 export default function Login() {

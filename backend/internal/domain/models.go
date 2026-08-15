@@ -128,11 +128,15 @@ type GymAthlete struct {
 	RegisteredAt      time.Time `json:"registered_at"`
 }
 type GymAthleteProfile struct {
-	ID           string    `json:"id"`
-	FirstName    string    `json:"first_name"`
-	LastName     string    `json:"last_name"`
-	Phone        *string   `json:"phone,omitempty"`
-	RegisteredAt time.Time `json:"registered_at"`
+	ID                string    `json:"id"`
+	FirstName         string    `json:"first_name"`
+	LastName          string    `json:"last_name"`
+	Phone             *string   `json:"phone,omitempty"`
+	Age               int       `json:"age"`
+	TuitionStatus     string    `json:"tuition_status"`
+	UnpaidMonths      int       `json:"unpaid_months"`
+	OutstandingAmount int64     `json:"outstanding_amount"`
+	RegisteredAt      time.Time `json:"registered_at"`
 }
 
 type GymCatalogItem struct {
@@ -242,6 +246,7 @@ type WalletEntry struct {
 	ReferenceType string          `json:"reference_type"`
 	ReferenceID   string          `json:"reference_id"`
 	Description   string          `json:"description"`
+	BalanceAfter  int64           `json:"balance_after"`
 	CreatedAt     time.Time       `json:"created_at"`
 }
 type WithdrawalStatus string

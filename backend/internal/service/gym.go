@@ -198,7 +198,8 @@ func (s *GymService) Athletes(ctx context.Context, gymID string, actor *domain.U
 	if actor.Role != domain.RoleAdmin && gym.CoachID != actor.ID {
 		return nil, domain.ErrForbidden
 	}
-	return s.gyms.ListGymAthletes(ctx, gymID)
+	year, month := persianYearMonth(s.now())
+	return s.gyms.ListGymAthletes(ctx, gymID, year, month)
 }
 func validateGym(c *domain.Gym) error {
 	if strings.TrimSpace(c.Name) == "" || c.Province == "" || c.City == "" || c.Address == "" || c.Sport == "" || c.SportStyle == "" || len(c.ActiveWeekdays) == 0 || c.StartTime == "" || c.EndTime == "" || c.TuitionAmount < 0 || c.Capacity < 0 {

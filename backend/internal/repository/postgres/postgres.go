@@ -240,8 +240,8 @@ func (s *Store) AddAthlete(c context.Context, v *domain.GymAthlete) error {
 	}
 	return tx.Commit(c)
 }
-func (s *Store) ListGymAthletes(c context.Context, gymID string) ([]domain.GymAthleteProfile, error) {
-	rows, e := s.DB.Query(c, `SELECT u.id,u.first_name,u.last_name,u.phone,ga.registered_at FROM gym_athletes ga JOIN users u ON u.id=ga.athlete_id WHERE ga.gym_id=$1 ORDER BY ga.registered_at DESC`, gymID)
+func (s *Store) ListGymAthletes(c context.Context, gymID string, year, month int) ([]domain.GymAthleteProfile, error) {
+	rows, e := s.DB.Query(c, `SELECT u.id,u.first_name,u.last_name,u.phone,COALESCE(EXTRACT(year FROM age(current_date,u.birth_date))::int,0),CASE WHEN g.tuition_mode='monthly' THEN GREATEST((($2*12+$3)-(ga.billing_start_year*12+ga.billing_start_month)+1)-(SELECT count(*) FROM tuition_payments tp WHERE tp.gym_id=ga.gym_id AND tp.athlete_id=ga.athlete_id AND tp.billing_year IS NOT NULL AND (tp.billing_year*12+tp.billing_month) BETWEEN (ga.billing_start_year*12+ga.billing_start_month) AND ($2*12+$3)),0) ELSE 0 END,g.tuition_amount,ga.registered_at FROM gym_athletes ga JOIN users u ON u.id=ga.athlete_id JOIN gyms g ON g.id=ga.gym_id WHERE ga.gym_id=$1 ORDER BY ga.registered_at DESC`, gymID, year, month)
 	if e != nil {
 		return nil, e
 	}
@@ -249,8 +249,14 @@ func (s *Store) ListGymAthletes(c context.Context, gymID string) ([]domain.GymAt
 	out := []domain.GymAthleteProfile{}
 	for rows.Next() {
 		var v domain.GymAthleteProfile
-		if e = rows.Scan(&v.ID, &v.FirstName, &v.LastName, &v.Phone, &v.RegisteredAt); e != nil {
+		var tuitionAmount int64
+		if e = rows.Scan(&v.ID, &v.FirstName, &v.LastName, &v.Phone, &v.Age, &v.UnpaidMonths, &tuitionAmount, &v.RegisteredAt); e != nil {
 			return nil, e
+		}
+		v.OutstandingAmount = int64(v.UnpaidMonths) * tuitionAmount
+		v.TuitionStatus = "settled"
+		if v.UnpaidMonths > 0 {
+			v.TuitionStatus = "debtor"
 		}
 		out = append(out, v)
 	}
@@ -478,6 +484,22 @@ func (s *Store) ListAthletePayments(c context.Context, athleteID string) ([]doma
 	}
 	return out, rows.Err()
 }
+func (s *Store) ListGymAthletePayments(c context.Context, gymID, athleteID string) ([]domain.AthletePayment, error) {
+	rows, e := s.DB.Query(c, `SELECT tp.id,tp.athlete_id,tp.gym_id,tp.coach_id,tp.tuition_amount,tp.platform_fee,tp.total_amount,tp.status,tp.tracking_id,COALESCE(tp.billing_year,0),COALESCE(tp.billing_month,0),tp.payment_kind,tp.created_at,g.name,concat_ws(' ',u.first_name,u.last_name) FROM tuition_payments tp JOIN gyms g ON g.id=tp.gym_id JOIN users u ON u.id=tp.coach_id WHERE tp.gym_id=$1 AND tp.athlete_id=$2 ORDER BY tp.created_at DESC,tp.billing_year DESC NULLS LAST,tp.billing_month DESC NULLS LAST`, gymID, athleteID)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	out := []domain.AthletePayment{}
+	for rows.Next() {
+		var payment domain.AthletePayment
+		if e = rows.Scan(&payment.ID, &payment.AthleteID, &payment.GymID, &payment.CoachID, &payment.Tuition, &payment.PlatformFee, &payment.Total, &payment.Status, &payment.TrackingID, &payment.BillingYear, &payment.BillingMonth, &payment.PaymentKind, &payment.CreatedAt, &payment.GymName, &payment.CoachName); e != nil {
+			return nil, e
+		}
+		out = append(out, payment)
+	}
+	return out, rows.Err()
+}
 func (s *Store) CreateWithdrawal(c context.Context, w *domain.WithdrawalRequest) error {
 	tx, e := s.DB.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if e != nil {
@@ -582,7 +604,7 @@ func (s *Store) ListLedger(c context.Context, coach string, limit, offset int) (
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, e := s.DB.Query(c, `SELECT id,coach_id,entry_type,amount,reference_type,reference_id,description,created_at FROM wallet_entries WHERE coach_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`, coach, limit, offset)
+	rows, e := s.DB.Query(c, `WITH ledger AS (SELECT we.id,we.coach_id,we.entry_type,we.amount,we.reference_type,we.reference_id,CASE WHEN we.entry_type='tuition_credit' THEN concat('واریز شهریه توسط ',athlete.first_name,' ',athlete.last_name,' - ',g.name) WHEN we.entry_type='withdrawal_hold' THEN 'درخواست برداشت از کیف پول' WHEN we.entry_type='withdrawal_release' THEN 'بازگشت مبلغ درخواست برداشت ردشده' WHEN we.entry_type='withdrawal_fee' THEN 'کارمزد برداشت' ELSE we.description END AS description,we.created_at,SUM(we.amount) OVER(ORDER BY we.created_at,we.id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS balance_after FROM wallet_entries we LEFT JOIN tuition_payments tp ON we.reference_type='tuition_payment' AND tp.id=we.reference_id LEFT JOIN users athlete ON athlete.id=tp.athlete_id LEFT JOIN gyms g ON g.id=tp.gym_id WHERE we.coach_id=$1) SELECT id,coach_id,entry_type,amount,reference_type,reference_id,description,balance_after,created_at FROM ledger ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`, coach, limit, offset)
 	if e != nil {
 		return nil, e
 	}
@@ -590,7 +612,7 @@ func (s *Store) ListLedger(c context.Context, coach string, limit, offset int) (
 	out := []domain.WalletEntry{}
 	for rows.Next() {
 		var v domain.WalletEntry
-		if e = rows.Scan(&v.ID, &v.CoachID, &v.Type, &v.Amount, &v.ReferenceType, &v.ReferenceID, &v.Description, &v.CreatedAt); e != nil {
+		if e = rows.Scan(&v.ID, &v.CoachID, &v.Type, &v.Amount, &v.ReferenceType, &v.ReferenceID, &v.Description, &v.BalanceAfter, &v.CreatedAt); e != nil {
 			return nil, e
 		}
 		out = append(out, v)

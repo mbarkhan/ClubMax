@@ -38,7 +38,7 @@ func main() {
 	}
 	users := service.NewUserService(store, postgres.OTPStore{Store: store}, store, logNotifier{}, cfg.OTPPepper)
 	gyms := service.NewGymService(postgres.GymStore{Store: store}, store)
-	finance := service.NewFinanceService(store, store)
+	finance := service.NewFinanceService(store, store, postgres.GymStore{Store: store})
 	messages := service.NewMessageService(postgres.MessageStore{Store: store}, store)
 	bootstrapAdmin(ctx, users)
 	srv := &http.Server{Addr: cfg.BackendAddress(), Handler: handler.New(users, gyms, finance, messages, cfg.JWTSecret, cfg.FrontendOrigin(), cfg.UploadDir), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
