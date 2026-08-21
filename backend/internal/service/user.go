@@ -131,7 +131,7 @@ func (s *UserService) AuthenticateMember(ctx context.Context, phone, password st
 	phone = normalizePhone(phone)
 	u, err := s.users.GetByPhone(ctx, phone)
 	if err != nil || !u.Active || !u.Role.ValidForRegistration() || u.PasswordHash == nil || !comparePassword(*u.PasswordHash, password) {
-		return nil, domain.ErrForbidden
+		return nil, domain.ErrInvalidCredentials
 	}
 	return u, nil
 }
@@ -141,11 +141,11 @@ func (s *UserService) Authenticate(ctx context.Context, identity, password strin
 		if u.Active && u.Role.ValidForRegistration() && u.PasswordHash != nil && comparePassword(*u.PasswordHash, password) {
 			return u, nil
 		}
-		return nil, domain.ErrForbidden
+		return nil, domain.ErrInvalidCredentials
 	}
 	u, e := s.users.GetByUsername(ctx, identity)
 	if e != nil || !u.Active || u.Role != domain.RoleAdmin || u.PasswordHash == nil || !comparePassword(*u.PasswordHash, password) {
-		return nil, domain.ErrForbidden
+		return nil, domain.ErrInvalidCredentials
 	}
 	return u, nil
 }
@@ -330,6 +330,13 @@ func (s *UserService) List(ctx context.Context, f repository.UserFilter) ([]doma
 	return s.users.List(ctx, f)
 }
 func (s *UserService) Delete(ctx context.Context, id, actorID string) error {
+	target, err := s.users.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if target.Username != nil && strings.EqualFold(strings.TrimSpace(*target.Username), "admin") {
+		return domain.ErrProtectedAdmin
+	}
 	if id == actorID {
 		return fmt.Errorf("%w: cannot delete current admin", domain.ErrInvalid)
 	}
@@ -353,9 +360,33 @@ func (s *UserService) CreateAdmin(ctx context.Context, name, username, password 
 func (s *UserService) AuthenticateAdmin(ctx context.Context, username, password string) (*domain.User, error) {
 	u, e := s.users.GetByUsername(ctx, username)
 	if e != nil || !u.Active || u.Role != domain.RoleAdmin || u.PasswordHash == nil || !comparePassword(*u.PasswordHash, password) {
-		return nil, domain.ErrForbidden
+		return nil, domain.ErrInvalidCredentials
 	}
 	return u, nil
+}
+
+// EnsureAdmin makes gymax.env authoritative for the development bootstrap
+// administrator. Changing its password takes effect after the next restart.
+func (s *UserService) EnsureAdmin(ctx context.Context, name, username, password string) (*domain.User, error) {
+	username = strings.TrimSpace(username)
+	existing, err := s.users.GetByUsername(ctx, username)
+	if errors.Is(err, domain.ErrNotFound) {
+		return s.CreateAdmin(ctx, name, username, password)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if existing.Role != domain.RoleAdmin || len(password) < 12 {
+		return nil, domain.ErrConflict
+	}
+	hash, err := hashPassword(password)
+	if err != nil {
+		return nil, err
+	}
+	if err = s.users.PromoteToAdmin(ctx, existing.ID, username, hash); err != nil {
+		return nil, err
+	}
+	return s.users.GetByID(ctx, existing.ID)
 }
 func (s *UserService) PromoteToAdmin(ctx context.Context, id, username, password string) error {
 	if strings.TrimSpace(username) == "" || len(password) < 12 {
@@ -409,9 +440,6 @@ func validateUser(u *domain.User) error {
 	if u.Role == domain.RoleAthlete {
 		if u.HasMedicalHistory == nil {
 			return domain.InvalidField("has_medical_history")
-		}
-		if u.BloodType == nil {
-			return domain.InvalidField("blood_type")
 		}
 		if u.EmergencyPhone == nil {
 			return domain.InvalidField("emergency_phone")

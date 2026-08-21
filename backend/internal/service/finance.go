@@ -56,7 +56,7 @@ func (s *FinanceService) RequestWithdrawal(ctx context.Context, coachID string, 
 		return nil, domain.ErrInsufficientFunds
 	}
 	fee := (gross * policy.FeeBPS) / 10000
-	r := &domain.WithdrawalRequest{ID: uuid.NewString(), CoachID: coachID, GrossAmount: gross, FeeAmount: fee, NetAmount: gross - fee, IBAN: iban, Status: domain.WithdrawalPending, CreatedAt: s.now(), UpdatedAt: s.now()}
+	r := &domain.WithdrawalRequest{ID: uuid.NewString(), CoachID: coachID, GrossAmount: gross, FeeAmount: fee, NetAmount: gross - fee, IBAN: iban, Status: domain.WithdrawalUnderReview, CreatedAt: s.now(), UpdatedAt: s.now()}
 	if r.NetAmount <= 0 {
 		return nil, domain.ErrInvalid
 	}
@@ -73,16 +73,43 @@ func (s *FinanceService) ReviewWithdrawal(ctx context.Context, adminID, id strin
 	if admin.Role != domain.RoleAdmin {
 		return domain.ErrForbidden
 	}
-	if status != domain.WithdrawalPaid && status != domain.WithdrawalRejected {
+	if status != domain.WithdrawalQueued && status != domain.WithdrawalRejected {
 		return domain.ErrInvalidState
 	}
-	if status == domain.WithdrawalPaid && (tracking == nil || strings.TrimSpace(*tracking) == "") {
+	if status == domain.WithdrawalQueued && (tracking == nil || strings.TrimSpace(*tracking) == "") {
 		return domain.ErrInvalid
 	}
 	if status == domain.WithdrawalRejected && (reason == nil || strings.TrimSpace(*reason) == "") {
 		return domain.ErrInvalid
 	}
-	return s.wallet.ReviewWithdrawal(ctx, id, adminID, status, tracking, reason)
+	var scheduledAt *time.Time
+	if status == domain.WithdrawalQueued {
+		clean := strings.TrimSpace(*tracking)
+		tracking = &clean
+		next := nextTehranSettlement(s.now())
+		scheduledAt = &next
+	} else {
+		clean := strings.TrimSpace(*reason)
+		reason = &clean
+	}
+	return s.wallet.ReviewWithdrawal(ctx, id, adminID, status, tracking, reason, scheduledAt)
+}
+
+func nextTehranSettlement(now time.Time) time.Time {
+	location, err := time.LoadLocation("Asia/Tehran")
+	if err != nil {
+		location = time.FixedZone("Asia/Tehran", 3*60*60+30*60)
+	}
+	local := now.In(location)
+	cutoff := time.Date(local.Year(), local.Month(), local.Day(), 23, 30, 0, 0, location)
+	if !local.Before(cutoff) {
+		cutoff = cutoff.AddDate(0, 0, 1)
+	}
+	return cutoff
+}
+
+func (s *FinanceService) CompleteDueWithdrawals(ctx context.Context) (int64, error) {
+	return s.wallet.CompleteDueWithdrawals(ctx, s.now())
 }
 func (s *FinanceService) SetPolicy(ctx context.Context, adminID string, p domain.WithdrawalPolicy) error {
 	u, e := s.users.GetByID(ctx, adminID)

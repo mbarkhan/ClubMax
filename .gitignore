@@ -5,4 +5,6 @@ coverage.out
 .~lock.*#
 frontend/node_modules/
 frontend/.next/
+frontend/.next-dev/
 .local/
+gymax.env

@@ -1,1 +1,114 @@
-.mobile-dashboard-links{display:none}.shell aside .identity b{font-size:16px}.shell aside .identity span{font-size:14px}.shell aside nav{gap:7px}.shell aside nav a{display:flex;align-items:center;gap:12px;padding:13px 12px;font-size:16px;line-height:1.25}.shell aside nav a:before{content:none;margin:0}.shell aside nav a span{flex:1}.shell aside .nav-icon{width:20px;height:20px;flex:0 0 20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.shell aside .logout{font-size:15px}@media(max-width:750px){.mobile-dashboard-links{display:flex;align-items:center;gap:5px;margin-right:auto}.mobile-dashboard-links a{padding:7px 9px;border-radius:8px;color:#b9cbc4;font-size:12px}.mobile-dashboard-links a.active{background:#ffffff14;color:#d9f67d}}
+.mobile-dashboard-links {
+  display: none;
+}
+.shell aside .identity b {
+  font-size: 14px;
+}
+.shell aside .identity span {
+  font-size: 12px;
+}
+.shell aside nav {
+  gap: 5px;
+}
+.shell aside nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  font-size: 13.5px;
+  line-height: 1.35;
+  transition:
+    background-color 0.16s,
+    color 0.16s,
+    transform 0.16s;
+}
+.shell aside nav a:before {
+  content: none;
+  margin: 0;
+}
+.shell aside nav a:hover {
+  background: #ffffff0b;
+  color: #e5eee9;
+  transform: translateX(-2px);
+}
+.shell aside nav a span {
+  flex: 1;
+}
+.shell aside .nav-icon {
+  box-sizing: border-box;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
+  padding: 4.5px;
+  border-radius: 8px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  transition:
+    color 0.16s,
+    background-color 0.16s;
+}
+.shell aside .nav-icon-dashboard {
+  color: #72d4ff;
+}
+.shell aside .nav-icon-users {
+  color: #c7a5ff;
+}
+.shell aside .nav-icon-gyms {
+  color: #80e3ab;
+}
+.shell aside .nav-icon-wallet {
+  color: #ffd06e;
+}
+.shell aside .nav-icon-explore {
+  color: #75ddd0;
+}
+.shell aside .nav-icon-payments {
+  color: #ffaf87;
+}
+.shell aside .nav-icon-messages {
+  color: #8eb9ff;
+}
+.shell aside .nav-icon-profile {
+  color: #f1a5c6;
+}
+.shell aside nav a.active {
+  background: #ffffff12;
+  color: #d9f67d;
+}
+.shell aside nav a.active .nav-icon {
+  color: #d9f67d;
+  background: #d9f67d1c;
+}
+.shell aside .logout {
+  font-size: 13px;
+}
+@media (max-width: 750px) {
+  .mobile-dashboard-links {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-right: auto;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .mobile-dashboard-links a {
+    padding: 7px 8px;
+    border-radius: 8px;
+    color: #b9cbc4;
+    font-size: 11px;
+  }
+  .mobile-dashboard-links a.active {
+    background: #ffffff14;
+    color: #d9f67d;
+  }
+  .shell aside {
+    overflow: hidden;
+  }
+  .shell aside > .logo {
+    flex: 0 0 auto;
+  }
+}

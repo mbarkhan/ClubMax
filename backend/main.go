@@ -40,10 +40,43 @@ func main() {
 	gyms := service.NewGymService(postgres.GymStore{Store: store}, store)
 	finance := service.NewFinanceService(store, store, postgres.GymStore{Store: store})
 	messages := service.NewMessageService(postgres.MessageStore{Store: store}, store)
+	admin := service.NewAdminService(store)
 	bootstrapAdmin(ctx, users)
-	srv := &http.Server{Addr: cfg.BackendAddress(), Handler: handler.New(users, gyms, finance, messages, cfg.JWTSecret, cfg.FrontendOrigin(), cfg.UploadDir), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
+	go runWithdrawalSettlement(ctx, finance)
+	srv := &http.Server{Addr: cfg.BackendAddress(), Handler: handler.New(users, gyms, finance, messages, admin, cfg.JWTSecret, cfg.FrontendOrigin(), cfg.UploadDir), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("GyMax API listening on %s", srv.Addr)
 	log.Fatal(srv.ListenAndServe())
+}
+
+func runWithdrawalSettlement(ctx context.Context, finance *service.FinanceService) {
+	if count, err := finance.CompleteDueWithdrawals(ctx); err != nil {
+		log.Printf("withdrawal settlement startup check: %v", err)
+	} else if count > 0 {
+		log.Printf("completed %d due withdrawals", count)
+	}
+	location, err := time.LoadLocation("Asia/Tehran")
+	if err != nil {
+		location = time.FixedZone("Asia/Tehran", 3*60*60+30*60)
+	}
+	for {
+		now := time.Now().In(location)
+		next := time.Date(now.Year(), now.Month(), now.Day(), 23, 30, 0, 0, location)
+		if !now.Before(next) {
+			next = next.AddDate(0, 0, 1)
+		}
+		timer := time.NewTimer(time.Until(next))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+			if count, err := finance.CompleteDueWithdrawals(ctx); err != nil {
+				log.Printf("withdrawal settlement: %v", err)
+			} else if count > 0 {
+				log.Printf("completed %d due withdrawals", count)
+			}
+		}
+	}
 }
 
 func bootstrapAdmin(ctx context.Context, s *service.UserService) {
@@ -52,7 +85,7 @@ func bootstrapAdmin(ctx context.Context, s *service.UserService) {
 		log.Print("admin bootstrap skipped: administrator settings are missing from gymax.env")
 		return
 	}
-	if _, e := s.CreateAdmin(ctx, name, user, pass); e != nil {
+	if _, e := s.EnsureAdmin(ctx, name, user, pass); e != nil {
 		log.Printf("admin bootstrap: %v", e)
 	}
 }

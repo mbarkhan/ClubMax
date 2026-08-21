@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import SiteLogo from "./SiteLogo";
+import "../dashboard-sidebar.css";
 
 const API = process.env.NEXT_PUBLIC_API_URL!;
 type SidebarUser = {
@@ -11,7 +12,8 @@ type SidebarUser = {
   last_name: string;
   face_image_id?: string;
 };
-type ItemKey = "dashboard" | "payments" | "profile";
+type ItemKey =
+  "dashboard" | "users" | "gyms" | "finance" | "payments" | "withdrawals" | "wallet" | "profile";
 const roleNames = { admin: "مدیر سایت", coach: "مربی", athlete: "ورزشکار" };
 
 function NavIcon({
@@ -72,7 +74,7 @@ function NavIcon({
     ),
   };
   return (
-    <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+    <svg className={`nav-icon nav-icon-${name}`} viewBox="0 0 24 24" aria-hidden="true">
       {paths[name]}
     </svg>
   );
@@ -114,6 +116,32 @@ export default function DashboardSidebar({
         <Link className={active === "dashboard" ? "active" : ""} href={`/${locale}/dashboard`}>
           داشبورد
         </Link>
+        {user.role === "admin" && (
+          <>
+            <Link className={active === "users" ? "active" : ""} href={`/${locale}/admin/users`}>
+              کاربران
+            </Link>
+            <Link className={active === "gyms" ? "active" : ""} href={`/${locale}/admin/gyms`}>
+              باشگاه‌ها
+            </Link>
+            <Link
+              className={active === "finance" ? "active" : ""}
+              href={`/${locale}/admin/finance`}
+            >
+              مالی
+            </Link>
+          </>
+        )}
+        {user.role === "coach" && (
+          <>
+            <Link className={active === "gyms" ? "active" : ""} href={`/${locale}/gyms`}>
+              باشگاه‌ها
+            </Link>
+            <Link className={active === "wallet" ? "active" : ""} href={`/${locale}/wallet`}>
+              کیف پول
+            </Link>
+          </>
+        )}
         {user.role === "athlete" && (
           <Link className={active === "payments" ? "active" : ""} href={`/${locale}/payments`}>
             پرداخت‌ها
@@ -138,9 +166,13 @@ export default function DashboardSidebar({
       </div>
       <nav>
         {item("dashboard", `/${locale}/dashboard`, "داشبورد", "dashboard")}
-        {user.role === "admin" && plain(`/${locale}/dashboard`, "کاربران", "users")}
-        {user.role === "coach" && plain(`/${locale}/gyms`, "باشگاه‌های من", "gyms")}
-        {user.role === "coach" && plain(`/${locale}/wallet`, "کیف پول و تراکنش‌ها", "wallet")}
+        {user.role === "admin" &&
+          item("users", `/${locale}/admin/users`, "مدیریت کاربران", "users")}
+        {user.role === "admin" && item("gyms", `/${locale}/admin/gyms`, "مدیریت باشگاه‌ها", "gyms")}
+        {user.role === "admin" &&
+          item("finance", `/${locale}/admin/finance`, "مدیریت مالی", "wallet")}
+        {user.role === "coach" && item("gyms", `/${locale}/gyms`, "باشگاه‌های من", "gyms")}
+        {user.role === "coach" && item("wallet", `/${locale}/wallet`, "کیف پول و برداشت", "wallet")}
         {user.role === "athlete" && plain(`/${locale}/explore-gyms`, "باشگاه‌ها", "explore")}
         {user.role === "athlete" &&
           item("payments", `/${locale}/payments`, "پرداخت‌های من", "payments")}

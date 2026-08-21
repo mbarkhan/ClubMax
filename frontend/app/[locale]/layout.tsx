@@ -12,6 +12,11 @@ const locales = ["fa", "en"] as const;
 export const metadata: Metadata = {
   title: "GyMax",
   description: "سامانه مدیریت باشگاه ورزشی",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export function generateStaticParams() { return locales.map((locale) => ({locale})); }

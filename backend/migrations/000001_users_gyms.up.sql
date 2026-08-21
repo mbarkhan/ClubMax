@@ -92,8 +92,12 @@ CREATE TABLE wallet_entries (
 CREATE INDEX wallet_entries_coach_created ON wallet_entries(coach_id,created_at DESC);
 CREATE TABLE withdrawal_requests (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), coach_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, gross_amount bigint NOT NULL CHECK(gross_amount>0), fee_amount bigint NOT NULL CHECK(fee_amount>=0), net_amount bigint NOT NULL CHECK(net_amount>0),
- iban varchar(26) NOT NULL CHECK(iban ~ '^IR[0-9]{24}$'), status varchar(20) NOT NULL CHECK(status IN ('pending','paid','rejected')),
- bank_tracking_code varchar(100), rejection_reason text, reviewed_by uuid REFERENCES users(id) ON DELETE SET NULL, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+ iban varchar(26) NOT NULL CHECK(iban ~ '^IR[0-9]{24}$'), status varchar(20) NOT NULL CHECK(status IN ('under_review','queued','completed','rejected')),
+ bank_tracking_code varchar(100), rejection_reason text, reviewed_by uuid REFERENCES users(id) ON DELETE SET NULL,
+ reviewed_at timestamptz, queued_at timestamptz, scheduled_completion_at timestamptz, completed_at timestamptz,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+ CHECK ((status IN ('queued','completed')) = (bank_tracking_code IS NOT NULL)),
+ CHECK (status <> 'rejected' OR rejection_reason IS NOT NULL)
 );
 CREATE INDEX withdrawal_requests_status_created ON withdrawal_requests(status,created_at DESC);
 

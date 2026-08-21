@@ -235,6 +235,7 @@ const (
 	LedgerTuition           LedgerEntryType = "tuition_credit"
 	LedgerWithdrawalHold    LedgerEntryType = "withdrawal_hold"
 	LedgerWithdrawalRelease LedgerEntryType = "withdrawal_release"
+	LedgerWithdrawalDebit   LedgerEntryType = "withdrawal_debit"
 	LedgerWithdrawalFee     LedgerEntryType = "withdrawal_fee"
 )
 
@@ -252,9 +253,10 @@ type WalletEntry struct {
 type WithdrawalStatus string
 
 const (
-	WithdrawalPending  WithdrawalStatus = "pending"
-	WithdrawalPaid     WithdrawalStatus = "paid"
-	WithdrawalRejected WithdrawalStatus = "rejected"
+	WithdrawalUnderReview WithdrawalStatus = "under_review"
+	WithdrawalQueued      WithdrawalStatus = "queued"
+	WithdrawalCompleted   WithdrawalStatus = "completed"
+	WithdrawalRejected    WithdrawalStatus = "rejected"
 )
 
 type WithdrawalRequest struct {
@@ -268,6 +270,11 @@ type WithdrawalRequest struct {
 	BankTrackingCode *string          `json:"bank_tracking_code,omitempty"`
 	RejectionReason  *string          `json:"rejection_reason,omitempty"`
 	ReviewedBy       *string          `json:"reviewed_by,omitempty"`
+	CoachName        string           `json:"coach_name,omitempty"`
+	ReviewedAt       *time.Time       `json:"reviewed_at,omitempty"`
+	QueuedAt         *time.Time       `json:"queued_at,omitempty"`
+	ScheduledAt      *time.Time       `json:"scheduled_completion_at,omitempty"`
+	CompletedAt      *time.Time       `json:"completed_at,omitempty"`
 	CreatedAt        time.Time        `json:"created_at"`
 	UpdatedAt        time.Time        `json:"updated_at"`
 }
@@ -276,4 +283,35 @@ type WithdrawalPolicy struct {
 	MaxAmount int64     `json:"max_amount"`
 	FeeBPS    int64     `json:"fee_bps"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type AdminOverview struct {
+	Users              int64 `json:"users"`
+	Coaches            int64 `json:"coaches"`
+	Athletes           int64 `json:"athletes"`
+	Gyms               int64 `json:"gyms"`
+	ActiveAthletes     int64 `json:"active_athletes"`
+	PaymentCount       int64 `json:"payment_count"`
+	GrossPayments      int64 `json:"gross_payments"`
+	PlatformRevenue    int64 `json:"platform_revenue"`
+	WithdrawalFees     int64 `json:"withdrawal_fees"`
+	PendingWithdrawals int64 `json:"pending_withdrawals"`
+}
+
+type AdminGym struct {
+	Gym
+	CoachName      string     `json:"coach_name"`
+	CoachPhone     *string    `json:"coach_phone,omitempty"`
+	ActiveAthletes int64      `json:"active_athletes"`
+	PaymentCount   int64      `json:"payment_count"`
+	PaidTuition    int64      `json:"paid_tuition"`
+	LastPaymentAt  *time.Time `json:"last_payment_at,omitempty"`
+}
+
+type AdminPayment struct {
+	TuitionPayment
+	AthleteName  string  `json:"athlete_name"`
+	AthletePhone *string `json:"athlete_phone,omitempty"`
+	GymName      string  `json:"gym_name"`
+	CoachName    string  `json:"coach_name"`
 }

@@ -25,12 +25,13 @@ type API struct {
 	gyms      *service.GymService
 	finance   *service.FinanceService
 	messages  *service.MessageService
+	admin     *service.AdminService
 	jwtKey    []byte
 	uploadDir string
 }
 
-func New(u *service.UserService, c *service.GymService, f *service.FinanceService, m *service.MessageService, jwtSecret, frontendOrigin, uploadDir string) http.Handler {
-	a := &API{users: u, gyms: c, finance: f, messages: m, jwtKey: []byte(jwtSecret), uploadDir: uploadDir}
+func New(u *service.UserService, c *service.GymService, f *service.FinanceService, m *service.MessageService, admin *service.AdminService, jwtSecret, frontendOrigin, uploadDir string) http.Handler {
+	a := &API{users: u, gyms: c, finance: f, messages: m, admin: admin, jwtKey: []byte(jwtSecret), uploadDir: uploadDir}
 	r := chi.NewRouter()
 	r.Use(recoverer, securityHeaders, locale, cors(frontendOrigin))
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) { write(w, 200, map[string]string{"status": "ok"}) })
@@ -73,6 +74,9 @@ func New(u *service.UserService, c *service.GymService, f *service.FinanceServic
 			r.With(requireRole(domain.RoleAdmin)).Post("/admins", a.createAdmin)
 			r.With(requireRole(domain.RoleAdmin)).Put("/users/{id}/promote", a.promoteUser)
 			r.With(requireRole(domain.RoleAdmin)).Delete("/users/{id}", a.deleteUser)
+			r.With(requireRole(domain.RoleAdmin)).Get("/admin/overview", a.adminOverview)
+			r.With(requireRole(domain.RoleAdmin)).Get("/admin/gyms", a.adminGyms)
+			r.With(requireRole(domain.RoleAdmin)).Get("/admin/payments", a.adminPayments)
 			r.With(requireRole(domain.RoleCoach)).Post("/gyms", a.createGym)
 			r.With(requireRole(domain.RoleAthlete)).Get("/gyms/catalog", a.gymCatalog)
 			r.With(requireRole(domain.RoleAthlete)).Get("/gyms/catalog/{id}", a.gymCatalogItem)
@@ -388,9 +392,27 @@ func (a *API) listUsers(w http.ResponseWriter, r *http.Request) {
 	v, e := a.users.List(r.Context(), repository.UserFilter{Role: role, Search: r.URL.Query().Get("q"), Limit: limit, Offset: offset})
 	respond(w, e, 200, v)
 }
+func (a *API) adminOverview(w http.ResponseWriter, r *http.Request) {
+	v, e := a.admin.Overview(r.Context())
+	respond(w, e, 200, v)
+}
+func (a *API) adminGyms(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	v, e := a.admin.Gyms(r.Context(), r.URL.Query().Get("q"), limit, offset)
+	respond(w, e, 200, v)
+}
+func (a *API) adminPayments(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	v, e := a.admin.Payments(r.Context(), r.URL.Query().Get("q"), limit, offset)
+	respond(w, e, 200, v)
+}
 func (a *API) deleteUser(w http.ResponseWriter, r *http.Request) {
-	e := a.users.Delete(r.Context(), chi.URLParam(r, "id"), current(r).ID)
+	id := chi.URLParam(r, "id")
+	e := a.users.Delete(r.Context(), id, current(r).ID)
 	if e == nil {
+		_ = os.RemoveAll(filepath.Join(a.uploadDir, "users", id))
 		w.WriteHeader(204)
 		return
 	}
@@ -489,8 +511,13 @@ func (a *API) deleteGymImage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 func (a *API) deleteGym(w http.ResponseWriter, r *http.Request) {
-	e := a.gyms.Delete(r.Context(), chi.URLParam(r, "id"), current(r))
+	id := chi.URLParam(r, "id")
+	images, _ := a.gyms.Images(r.Context(), id, current(r))
+	e := a.gyms.Delete(r.Context(), id, current(r))
 	if e == nil {
+		for _, image := range images {
+			_ = os.Remove(filepath.Join(a.uploadDir, filepath.FromSlash(image.StorageKey)))
+		}
 		w.WriteHeader(204)
 		return
 	}
@@ -605,6 +632,10 @@ func problem(w http.ResponseWriter, e error) {
 		status, code = 400, "invalid_otp"
 	case errors.Is(e, domain.ErrForbidden):
 		status, code = 403, "forbidden"
+	case errors.Is(e, domain.ErrInvalidCredentials):
+		status, code = 401, "invalid_credentials"
+	case errors.Is(e, domain.ErrProtectedAdmin):
+		status, code = 409, "protected_admin"
 	case errors.Is(e, domain.ErrNotFound):
 		status, code = 404, "not_found"
 	case errors.Is(e, domain.ErrConflict):

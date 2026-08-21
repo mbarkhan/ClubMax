@@ -7,6 +7,7 @@ import LocationFields from "../../components/LocationFields";
 import JalaliDateInput from "../../components/JalaliDateInput";
 import FileField from "../../components/FileField";
 import PasswordField from "../../components/PasswordField";
+import IranianIBANInput from "../../components/IranianIBANInput";
 import "../../auth.css";
 const API = process.env.NEXT_PUBLIC_API_URL!;
 const education = [
@@ -96,15 +97,14 @@ export default function Signup() {
       };
     try {
       if (!role) throw new Error("انتخاب نقش مربی یا ورزشکار الزامی است.");
+      const ibanDigits = value("bank_iban").replace(/\D/g, ""),
+        bankIBAN = ibanDigits ? `IR${ibanDigits}` : "";
       if (value("password") !== value("password_confirmation"))
         fail("password_confirmation", "رمز عبور و تکرار آن یکسان نیستند.");
       if (!validNationalID(value("national_id")))
         fail("national_id", "کد ملی واردشده معتبر نیست. لطفاً کد ملی صحیح را وارد کنید.");
-      if (value("bank_iban") && !validIranianIBAN(value("bank_iban")))
-        fail(
-          "bank_iban",
-          "شماره شبای واردشده معتبر نیست. شبا باید با IR آغاز شود و ۲۶ کاراکتر داشته باشد."
-        );
+      if (bankIBAN && !validIranianIBAN(bankIBAN))
+        fail("bank_iban", "شماره شبای واردشده معتبر نیست. هر ۲۴ رقم بعد از IR را کامل وارد کنید.");
       if (!/^09\d{9}$/.test(value("phone")))
         fail("phone", "شماره موبایل معتبر نیست. شماره باید با 09 آغاز شود و ۱۱ رقم داشته باشد.");
       if (role === "athlete" && !/^09\d{9}$/.test(value("emergency_phone")))
@@ -118,7 +118,7 @@ export default function Signup() {
         role,
         phone: value("phone"),
         password: value("password"),
-        bank_iban: optional("bank_iban"),
+        bank_iban: bankIBAN || null,
         first_name: value("first_name"),
         last_name: value("last_name"),
         father_name: optional("father_name"),
@@ -134,7 +134,7 @@ export default function Signup() {
         description: optional("description"),
         has_medical_history: role === "athlete" ? medical : null,
         medical_history: role === "athlete" ? optional("medical_history") : null,
-        blood_type: role === "athlete" ? value("blood_type") : null,
+        blood_type: role === "athlete" ? optional("blood_type") : null,
         emergency_phone: role === "athlete" ? value("emergency_phone") : null,
         emergency_relation: role === "athlete" ? value("emergency_relation") : null,
         sports_insurance_expires_at:
@@ -209,7 +209,9 @@ export default function Signup() {
             <small>عضویت و پیگیری فعالیت‌ها</small>
           </button>
         </div>
-        {!role && <p className="role-required-hint">انتخاب یکی از نقش‌های مربی یا ورزشکار الزامی است.</p>}
+        {!role && (
+          <p className="role-required-hint">انتخاب یکی از نقش‌های مربی یا ورزشکار الزامی است.</p>
+        )}
         <h3>اطلاعات هویتی</h3>
         <div className="form-grid">
           <Field label="نام" name="first_name" required />
@@ -270,12 +272,7 @@ export default function Signup() {
             />
           </Field>
           <Field label="شماره شبای بانکی ایران" name="bank_iban">
-            <input
-              name="bank_iban"
-              dir="ltr"
-              maxLength={32}
-              placeholder="IR00 0000 0000 0000 0000 0000 00"
-            />
+            <IranianIBANInput />
           </Field>
           <div className="signup-password-fields">
             <PasswordField name="password" label="رمز عبور" />
@@ -296,9 +293,9 @@ export default function Signup() {
                 </select>
               </Field>
               {medical && <Field label="شرح سابقه بیماری" name="medical_history" required />}
-              <Field label="گروه خونی" name="blood_type" required>
-                <select name="blood_type" required defaultValue="">
-                  <option value="">انتخاب کنید</option>
+              <Field label="گروه خونی (اختیاری)" name="blood_type">
+                <select name="blood_type" defaultValue="">
+                  <option value="">انتخاب نشده</option>
                   {blood.map((x) => (
                     <option key={x}>{x}</option>
                   ))}

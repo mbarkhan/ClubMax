@@ -69,11 +69,18 @@ type WalletRepository interface {
 	CreateWithdrawal(context.Context, *domain.WithdrawalRequest) error
 	ListWithdrawals(context.Context, *domain.WithdrawalStatus, int, int) ([]domain.WithdrawalRequest, error)
 	ListCoachWithdrawals(context.Context, string, int, int) ([]domain.WithdrawalRequest, error)
-	ReviewWithdrawal(context.Context, string, string, domain.WithdrawalStatus, *string, *string) error
+	ReviewWithdrawal(context.Context, string, string, domain.WithdrawalStatus, *string, *string, *time.Time) error
+	CompleteDueWithdrawals(context.Context, time.Time) (int64, error)
 	ListLedger(context.Context, string, int, int) ([]domain.WalletEntry, error)
 	GetRegistrationFee(context.Context) (domain.RegistrationFeePolicy, error)
 	PayTuition(context.Context, *domain.TuitionPayment) error
 	PayMonthlyTuition(context.Context, string, string, int, int, string, time.Time) (*domain.MonthlyTuitionPayment, error)
 	ListAthletePayments(context.Context, string) ([]domain.AthletePayment, error)
 	ListGymAthletePayments(context.Context, string, string) ([]domain.AthletePayment, error)
+}
+
+type AdminRepository interface {
+	AdminOverview(context.Context) (domain.AdminOverview, error)
+	ListAdminGyms(context.Context, string, int, int) ([]domain.AdminGym, error)
+	ListAdminPayments(context.Context, string, int, int) ([]domain.AdminPayment, error)
 }

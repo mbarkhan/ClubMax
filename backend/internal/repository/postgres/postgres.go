@@ -41,6 +41,9 @@ func dbError(e error) error {
 	if errors.As(e, &pe) && strings.Contains(pe.Message, "GYM_LIMIT_REACHED") {
 		return domain.ErrGymLimit
 	}
+	if errors.As(e, &pe) && strings.Contains(pe.Message, "PROTECTED_DEFAULT_ADMIN") {
+		return domain.ErrProtectedAdmin
+	}
 	return e
 }
 
@@ -70,7 +73,7 @@ func (s *Store) UpdatePhone(c context.Context, id, phone string) error {
 	return dbError(e)
 }
 func (s *Store) PromoteToAdmin(c context.Context, id, username, passwordHash string) error {
-	tag, e := s.DB.Exec(c, `UPDATE users SET role='admin',username=$2,password_hash=$3,phone=NULL,updated_at=now() WHERE id=$1`, id, username, passwordHash)
+	tag, e := s.DB.Exec(c, `UPDATE users SET role='admin',username=$2,password_hash=$3,phone=NULL,bank_iban=NULL,updated_at=now() WHERE id=$1`, id, username, passwordHash)
 	if e == nil && tag.RowsAffected() == 0 {
 		return domain.ErrNotFound
 	}
@@ -528,17 +531,17 @@ func (s *Store) CreateWithdrawal(c context.Context, w *domain.WithdrawalRequest)
 }
 func scanWithdrawal(r pgx.Row) (*domain.WithdrawalRequest, error) {
 	v := new(domain.WithdrawalRequest)
-	e := r.Scan(&v.ID, &v.CoachID, &v.GrossAmount, &v.FeeAmount, &v.NetAmount, &v.IBAN, &v.Status, &v.BankTrackingCode, &v.RejectionReason, &v.ReviewedBy, &v.CreatedAt, &v.UpdatedAt)
+	e := r.Scan(&v.ID, &v.CoachID, &v.GrossAmount, &v.FeeAmount, &v.NetAmount, &v.IBAN, &v.Status, &v.BankTrackingCode, &v.RejectionReason, &v.ReviewedBy, &v.CoachName, &v.ReviewedAt, &v.QueuedAt, &v.ScheduledAt, &v.CompletedAt, &v.CreatedAt, &v.UpdatedAt)
 	return v, dbError(e)
 }
 
-const withdrawalCols = `id,coach_id,gross_amount,fee_amount,net_amount,iban,status,bank_tracking_code,rejection_reason,reviewed_by,created_at,updated_at`
+const withdrawalCols = `wr.id,wr.coach_id,wr.gross_amount,wr.fee_amount,wr.net_amount,wr.iban,wr.status,wr.bank_tracking_code,wr.rejection_reason,wr.reviewed_by,concat(coach.first_name,' ',coach.last_name),wr.reviewed_at,wr.queued_at,wr.scheduled_completion_at,wr.completed_at,wr.created_at,wr.updated_at`
 
 func (s *Store) ListWithdrawals(c context.Context, status *domain.WithdrawalStatus, limit, offset int) ([]domain.WithdrawalRequest, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, e := s.DB.Query(c, `SELECT `+withdrawalCols+` FROM withdrawal_requests WHERE ($1::varchar IS NULL OR status=$1) ORDER BY created_at DESC LIMIT $2 OFFSET $3`, status, limit, offset)
+	rows, e := s.DB.Query(c, `SELECT `+withdrawalCols+` FROM withdrawal_requests wr JOIN users coach ON coach.id=wr.coach_id WHERE ($1::varchar IS NULL OR wr.status=$1) ORDER BY wr.created_at DESC LIMIT $2 OFFSET $3`, status, limit, offset)
 	if e != nil {
 		return nil, e
 	}
@@ -557,7 +560,7 @@ func (s *Store) ListCoachWithdrawals(c context.Context, coach string, limit, off
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, e := s.DB.Query(c, `SELECT `+withdrawalCols+` FROM withdrawal_requests WHERE coach_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`, coach, limit, offset)
+	rows, e := s.DB.Query(c, `SELECT `+withdrawalCols+` FROM withdrawal_requests wr JOIN users coach ON coach.id=wr.coach_id WHERE wr.coach_id=$1 ORDER BY wr.created_at DESC LIMIT $2 OFFSET $3`, coach, limit, offset)
 	if e != nil {
 		return nil, e
 	}
@@ -572,7 +575,7 @@ func (s *Store) ListCoachWithdrawals(c context.Context, coach string, limit, off
 	}
 	return out, rows.Err()
 }
-func (s *Store) ReviewWithdrawal(c context.Context, id, admin string, status domain.WithdrawalStatus, tracking, reason *string) error {
+func (s *Store) ReviewWithdrawal(c context.Context, id, admin string, status domain.WithdrawalStatus, tracking, reason *string, scheduledAt *time.Time) error {
 	tx, e := s.DB.Begin(c)
 	if e != nil {
 		return e
@@ -585,10 +588,10 @@ func (s *Store) ReviewWithdrawal(c context.Context, id, admin string, status dom
 	if e != nil {
 		return dbError(e)
 	}
-	if current != domain.WithdrawalPending {
+	if current != domain.WithdrawalUnderReview {
 		return domain.ErrInvalidState
 	}
-	tag, e := tx.Exec(c, `UPDATE withdrawal_requests SET status=$2,bank_tracking_code=$3,rejection_reason=$4,reviewed_by=$5,updated_at=now() WHERE id=$1`, id, status, tracking, reason, admin)
+	tag, e := tx.Exec(c, `UPDATE withdrawal_requests SET status=$2::varchar,bank_tracking_code=$3,rejection_reason=$4,reviewed_by=$5,reviewed_at=now(),queued_at=CASE WHEN $2::varchar='queued' THEN now() END,scheduled_completion_at=$6,updated_at=now() WHERE id=$1`, id, status, tracking, reason, admin, scheduledAt)
 	if e != nil || tag.RowsAffected() != 1 {
 		return dbError(e)
 	}
@@ -600,11 +603,65 @@ func (s *Store) ReviewWithdrawal(c context.Context, id, admin string, status dom
 	}
 	return tx.Commit(c)
 }
+
+func (s *Store) CompleteDueWithdrawals(c context.Context, now time.Time) (int64, error) {
+	tx, e := s.DB.Begin(c)
+	if e != nil {
+		return 0, e
+	}
+	defer tx.Rollback(c)
+	rows, e := tx.Query(c, `SELECT id,coach_id,gross_amount,fee_amount,net_amount,COALESCE(reviewed_by,coach_id),bank_tracking_code FROM withdrawal_requests WHERE status='queued' AND scheduled_completion_at<=$1 ORDER BY scheduled_completion_at FOR UPDATE SKIP LOCKED`, now)
+	if e != nil {
+		return 0, e
+	}
+	type due struct {
+		id, coach, admin, tracking string
+		gross, fee, net            int64
+	}
+	items := []due{}
+	for rows.Next() {
+		var v due
+		if e = rows.Scan(&v.id, &v.coach, &v.gross, &v.fee, &v.net, &v.admin, &v.tracking); e != nil {
+			rows.Close()
+			return 0, e
+		}
+		items = append(items, v)
+	}
+	if e = rows.Err(); e != nil {
+		rows.Close()
+		return 0, e
+	}
+	rows.Close()
+	for _, v := range items {
+		if _, e = tx.Exec(c, `UPDATE withdrawal_requests SET status='completed',completed_at=$2,updated_at=$2 WHERE id=$1`, v.id, now); e != nil {
+			return 0, e
+		}
+		if _, e = tx.Exec(c, `INSERT INTO wallet_entries(id,coach_id,entry_type,amount,reference_type,reference_id,description) VALUES(gen_random_uuid(),$1,$2,$3,'withdrawal',$4,'release reserved amount after settlement'),(gen_random_uuid(),$1,$5,$6,'withdrawal',$4,'bank payout')`, v.coach, domain.LedgerWithdrawalRelease, v.gross, v.id, domain.LedgerWithdrawalDebit, -v.net); e != nil {
+			return 0, dbError(e)
+		}
+		if v.fee > 0 {
+			if _, e = tx.Exec(c, `INSERT INTO wallet_entries(id,coach_id,entry_type,amount,reference_type,reference_id,description) VALUES(gen_random_uuid(),$1,$2,$3,'withdrawal',$4,'GyMax withdrawal fee')`, v.coach, domain.LedgerWithdrawalFee, -v.fee, v.id); e != nil {
+				return 0, dbError(e)
+			}
+		}
+		var messageID string
+		if e = tx.QueryRow(c, `INSERT INTO messages(id,sender_id,recipient_id,audience,subject,body,created_at) VALUES(gen_random_uuid(),$1,$2,'direct','تکمیل واریز برداشت','درخواست برداشت شما تکمیل شد. کد پیگیری بانکی: ' || $3::text,$4) RETURNING id`, v.admin, v.coach, v.tracking, now).Scan(&messageID); e != nil {
+			return 0, e
+		}
+		if _, e = tx.Exec(c, `INSERT INTO message_recipients(message_id,user_id) VALUES($1,$2)`, messageID, v.coach); e != nil {
+			return 0, e
+		}
+	}
+	if e = tx.Commit(c); e != nil {
+		return 0, e
+	}
+	return int64(len(items)), nil
+}
 func (s *Store) ListLedger(c context.Context, coach string, limit, offset int) ([]domain.WalletEntry, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, e := s.DB.Query(c, `WITH ledger AS (SELECT we.id,we.coach_id,we.entry_type,we.amount,we.reference_type,we.reference_id,CASE WHEN we.entry_type='tuition_credit' THEN concat('واریز شهریه توسط ',athlete.first_name,' ',athlete.last_name,' - ',g.name) WHEN we.entry_type='withdrawal_hold' THEN 'درخواست برداشت از کیف پول' WHEN we.entry_type='withdrawal_release' THEN 'بازگشت مبلغ درخواست برداشت ردشده' WHEN we.entry_type='withdrawal_fee' THEN 'کارمزد برداشت' ELSE we.description END AS description,we.created_at,SUM(we.amount) OVER(ORDER BY we.created_at,we.id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS balance_after FROM wallet_entries we LEFT JOIN tuition_payments tp ON we.reference_type='tuition_payment' AND tp.id=we.reference_id LEFT JOIN users athlete ON athlete.id=tp.athlete_id LEFT JOIN gyms g ON g.id=tp.gym_id WHERE we.coach_id=$1) SELECT id,coach_id,entry_type,amount,reference_type,reference_id,description,balance_after,created_at FROM ledger ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`, coach, limit, offset)
+	rows, e := s.DB.Query(c, `WITH ledger AS (SELECT we.id,we.coach_id,we.entry_type,we.amount,we.reference_type,we.reference_id,CASE WHEN we.entry_type='tuition_credit' THEN concat('واریز شهریه توسط ',athlete.first_name,' ',athlete.last_name,' - ',g.name) WHEN we.entry_type='withdrawal_hold' THEN 'رزرو مبلغ درخواست برداشت' WHEN we.entry_type='withdrawal_release' THEN 'آزادسازی مبلغ رزروشده' WHEN we.entry_type='withdrawal_debit' THEN 'واریز بانکی به مربی' WHEN we.entry_type='withdrawal_fee' THEN 'کارمزد خدمات جی‌مکس' ELSE we.description END AS description,we.created_at,SUM(we.amount) OVER(ORDER BY we.created_at,we.id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS balance_after FROM wallet_entries we LEFT JOIN tuition_payments tp ON we.reference_type='tuition_payment' AND tp.id=we.reference_id LEFT JOIN users athlete ON athlete.id=tp.athlete_id LEFT JOIN gyms g ON g.id=tp.gym_id WHERE we.coach_id=$1) SELECT id,coach_id,entry_type,amount,reference_type,reference_id,description,balance_after,created_at FROM ledger ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`, coach, limit, offset)
 	if e != nil {
 		return nil, e
 	}
@@ -613,6 +670,64 @@ func (s *Store) ListLedger(c context.Context, coach string, limit, offset int) (
 	for rows.Next() {
 		var v domain.WalletEntry
 		if e = rows.Scan(&v.ID, &v.CoachID, &v.Type, &v.Amount, &v.ReferenceType, &v.ReferenceID, &v.Description, &v.BalanceAfter, &v.CreatedAt); e != nil {
+			return nil, e
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) AdminOverview(c context.Context) (domain.AdminOverview, error) {
+	var v domain.AdminOverview
+	e := s.DB.QueryRow(c, `SELECT
+		(SELECT count(*) FROM users),
+		(SELECT count(*) FROM users WHERE role='coach'),
+		(SELECT count(*) FROM users WHERE role='athlete'),
+		(SELECT count(*) FROM gyms),
+		(SELECT count(DISTINCT athlete_id) FROM gym_athletes),
+		(SELECT count(*) FROM tuition_payments WHERE status='succeeded'),
+		(SELECT COALESCE(sum(total_amount),0) FROM tuition_payments WHERE status='succeeded'),
+		(SELECT COALESCE(sum(platform_fee),0) FROM tuition_payments WHERE status='succeeded'),
+		(SELECT COALESCE(sum(fee_amount),0) FROM withdrawal_requests WHERE status='completed'),
+		(SELECT count(*) FROM withdrawal_requests WHERE status IN ('under_review','queued'))`).Scan(
+		&v.Users, &v.Coaches, &v.Athletes, &v.Gyms, &v.ActiveAthletes, &v.PaymentCount,
+		&v.GrossPayments, &v.PlatformRevenue, &v.WithdrawalFees, &v.PendingWithdrawals)
+	return v, e
+}
+
+func (s *Store) ListAdminGyms(c context.Context, search string, limit, offset int) ([]domain.AdminGym, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, e := s.DB.Query(c, `SELECT g.id,g.coach_id,g.name,g.province,g.city,g.address,g.phone,g.sport,g.sport_style,g.active_weekdays,g.start_time::text,g.end_time::text,g.tuition_mode,g.tuition_amount,g.capacity,g.created_at,g.updated_at,concat(coach.first_name,' ',coach.last_name),coach.phone,member_stats.active_athletes,payment_stats.payment_count,payment_stats.paid_tuition,payment_stats.last_payment_at FROM gyms g JOIN users coach ON coach.id=g.coach_id LEFT JOIN LATERAL (SELECT count(*) AS active_athletes FROM gym_athletes ga JOIN users athlete ON athlete.id=ga.athlete_id AND athlete.active WHERE ga.gym_id=g.id) member_stats ON true LEFT JOIN LATERAL (SELECT count(*) AS payment_count,COALESCE(sum(tp.tuition_amount),0) AS paid_tuition,max(tp.created_at) AS last_payment_at FROM tuition_payments tp WHERE tp.gym_id=g.id AND tp.status='succeeded') payment_stats ON true WHERE ($1='' OR g.name ILIKE '%'||$1||'%' OR concat(coach.first_name,' ',coach.last_name) ILIKE '%'||$1||'%' OR g.sport ILIKE '%'||$1||'%') ORDER BY g.created_at DESC LIMIT $2 OFFSET $3`, search, limit, offset)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	out := []domain.AdminGym{}
+	for rows.Next() {
+		var v domain.AdminGym
+		if e = rows.Scan(&v.ID, &v.CoachID, &v.Name, &v.Province, &v.City, &v.Address, &v.Phone, &v.Sport, &v.SportStyle, &v.ActiveWeekdays, &v.StartTime, &v.EndTime, &v.TuitionMode, &v.TuitionAmount, &v.Capacity, &v.CreatedAt, &v.UpdatedAt, &v.CoachName, &v.CoachPhone, &v.ActiveAthletes, &v.PaymentCount, &v.PaidTuition, &v.LastPaymentAt); e != nil {
+			return nil, e
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) ListAdminPayments(c context.Context, search string, limit, offset int) ([]domain.AdminPayment, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, e := s.DB.Query(c, `SELECT tp.id,tp.athlete_id,tp.gym_id,tp.coach_id,tp.tuition_amount,tp.platform_fee,tp.total_amount,tp.status,tp.tracking_id,COALESCE(tp.billing_year,0),COALESCE(tp.billing_month,0),tp.payment_kind,tp.created_at,concat(athlete.first_name,' ',athlete.last_name),athlete.phone,g.name,concat(coach.first_name,' ',coach.last_name) FROM tuition_payments tp JOIN users athlete ON athlete.id=tp.athlete_id JOIN users coach ON coach.id=tp.coach_id JOIN gyms g ON g.id=tp.gym_id WHERE ($1='' OR tp.tracking_id ILIKE '%'||$1||'%' OR g.name ILIKE '%'||$1||'%' OR concat(athlete.first_name,' ',athlete.last_name) ILIKE '%'||$1||'%') ORDER BY tp.created_at DESC LIMIT $2 OFFSET $3`, search, limit, offset)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	out := []domain.AdminPayment{}
+	for rows.Next() {
+		var v domain.AdminPayment
+		if e = rows.Scan(&v.ID, &v.AthleteID, &v.GymID, &v.CoachID, &v.Tuition, &v.PlatformFee, &v.Total, &v.Status, &v.TrackingID, &v.BillingYear, &v.BillingMonth, &v.PaymentKind, &v.CreatedAt, &v.AthleteName, &v.AthletePhone, &v.GymName, &v.CoachName); e != nil {
 			return nil, e
 		}
 		out = append(out, v)
