@@ -62,7 +62,7 @@ export default function Profile({ params }: { params: Promise<{ locale: string }
     [deleteStep, setDeleteStep] = useState(false),
     [deleteCode, setDeleteCode] = useState(""),
     [deleteConfirmed, setDeleteConfirmed] = useState(false);
-  const token = () => localStorage.getItem("gymax_access_token") || "",
+  const token = () => localStorage.getItem("clubmax_access_token") || "",
     headers = () => ({
       Authorization: `Bearer ${token()}`,
       "Content-Type": "application/json",
@@ -127,7 +127,7 @@ export default function Profile({ params }: { params: Promise<{ locale: string }
         data = await response.json();
       if (!response.ok) throw new Error(data.message || "ذخیره اطلاعات انجام نشد.");
       setUser(data);
-      localStorage.setItem("gymax_user", JSON.stringify(data));
+      localStorage.setItem("clubmax_user", JSON.stringify(data));
       setMessage("تغییرات پروفایل ذخیره شد.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "ذخیره اطلاعات انجام نشد.");

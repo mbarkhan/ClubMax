@@ -30,7 +30,7 @@ export default function UsersPage({ params }: { params: Promise<{ locale: string
     [username, setUsername] = useState(""),
     [password, setPassword] = useState("");
   const load = useCallback(() => {
-    const token = localStorage.getItem("gymax_access_token") || "";
+    const token = localStorage.getItem("clubmax_access_token") || "";
     fetch(`${API}/v1/users?limit=100&offset=${page * 100}&q=${encodeURIComponent(query)}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -49,7 +49,7 @@ export default function UsersPage({ params }: { params: Promise<{ locale: string
     if (!confirm(`حساب ${user.first_name} ${user.last_name} و اطلاعات وابسته حذف شود؟`)) return;
     const r = await fetch(`${API}/v1/users/${user.id}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${localStorage.getItem("gymax_access_token") || ""}` },
+      headers: { Authorization: `Bearer ${localStorage.getItem("clubmax_access_token") || ""}` },
     });
     if (!r.ok) {
       const d = await r.json();
@@ -63,7 +63,7 @@ export default function UsersPage({ params }: { params: Promise<{ locale: string
     const r = await fetch(`${API}/v1/users/${selected.id}/promote`, {
       method: "PUT",
       headers: {
-        Authorization: `Bearer ${localStorage.getItem("gymax_access_token") || ""}`,
+        Authorization: `Bearer ${localStorage.getItem("clubmax_access_token") || ""}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ username, password }),

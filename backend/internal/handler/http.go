@@ -7,10 +7,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/gymax/gymax/internal/domain"
-	"github.com/gymax/gymax/internal/reference"
-	"github.com/gymax/gymax/internal/repository"
-	"github.com/gymax/gymax/internal/service"
+	"github.com/clubmax/clubmax/internal/domain"
+	"github.com/clubmax/clubmax/internal/reference"
+	"github.com/clubmax/clubmax/internal/repository"
+	"github.com/clubmax/clubmax/internal/service"
 	"io"
 	"net/http"
 	"net/url"
@@ -704,7 +704,7 @@ func (a *API) identity(next http.Handler) http.Handler {
 				return nil, errors.New("unexpected signing method")
 			}
 			return a.jwtKey, nil
-		}, jwt.WithIssuer("gymax"), jwt.WithAudience("gymax-web"), jwt.WithExpirationRequired())
+		}, jwt.WithIssuer("clubmax"), jwt.WithAudience("clubmax-web"), jwt.WithExpirationRequired())
 		if e != nil || !token.Valid {
 			write(w, 401, map[string]string{"error": "unauthorized", "message": message(w, "unauthorized")})
 			return
@@ -740,6 +740,6 @@ func requireRole(roles ...domain.Role) func(http.Handler) http.Handler {
 }
 func (a *API) signToken(u *domain.User) (string, error) {
 	now := time.Now()
-	claims := jwt.MapClaims{"sub": u.ID, "role": u.Role, "iat": now.Unix(), "exp": now.Add(8 * time.Hour).Unix(), "iss": "gymax", "aud": "gymax-web"}
+	claims := jwt.MapClaims{"sub": u.ID, "role": u.Role, "iat": now.Unix(), "exp": now.Add(8 * time.Hour).Unix(), "iss": "clubmax", "aud": "clubmax-web"}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(a.jwtKey)
 }

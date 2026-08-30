@@ -29,7 +29,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
             <br />
             <em>هوشمندتر</em> مدیریت کن.
           </h1>
-          <p>GyMax فضای یکپارچه مربی، ورزشکاره؛ از ثبت اعضا تا برنامه‌ها و پرداخت‌ها.</p>
+          <p>ClubMax فضای یکپارچه مربی، ورزشکاره؛ از ثبت اعضا تا برنامه‌ها و پرداخت‌ها.</p>
           <div>
             <Link href={`/${locale}/signup`}>شروع ثبت‌نام ←</Link>
             <Link href={`/${locale}/login`}>حساب کاربری دارم</Link>
@@ -83,9 +83,9 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
       </section>
       <section id="news" className="home-section news">
         <span>اخبار و تازه‌ها</span>
-        <h2>از GyMax چه خبر؟</h2>
+        <h2>از ClubMax چه خبر؟</h2>
         <div className="news-grid">
-          {["راهنمای شروع برای مربیان", "امنیت اطلاعات ورزشکاران", "نسخه بعدی GyMax"].map(
+          {["راهنمای شروع برای مربیان", "امنیت اطلاعات ورزشکاران", "نسخه بعدی ClubMax"].map(
             (x, i) => (
               <article key={x}>
                 <small>خبر {i + 1}</small>

@@ -55,7 +55,7 @@ export default function Wallet() {
     [message, setMessage] = useState(""),
     [working, setWorking] = useState(false);
   const headers = {
-    Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("gymax_access_token") || "" : ""}`,
+    Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("clubmax_access_token") || "" : ""}`,
     "Accept-Language": "fa",
   };
   const load = () =>

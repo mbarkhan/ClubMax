@@ -26,8 +26,8 @@ export default function Login() {
         }),
         data = await response.json();
       if (!response.ok) throw new Error(data.message || "نام کاربری یا رمز عبور صحیح نیست.");
-      localStorage.setItem("gymax_access_token", data.access_token);
-      localStorage.setItem("gymax_user", JSON.stringify(data.user));
+      localStorage.setItem("clubmax_access_token", data.access_token);
+      localStorage.setItem("clubmax_user", JSON.stringify(data.user));
       router.replace(`/${locale}/dashboard`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "ارتباط با سرور برقرار نشد.");

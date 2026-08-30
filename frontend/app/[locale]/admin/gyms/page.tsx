@@ -29,7 +29,7 @@ export default function GymsPage({ params }: { params: Promise<{ locale: string 
   const load = useCallback(
     () =>
       fetch(`${API}/v1/admin/gyms?limit=100&offset=${page * 100}&q=${encodeURIComponent(query)}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("gymax_access_token") || ""}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem("clubmax_access_token") || ""}` },
       })
         .then(async (r) => {
           const d = await r.json();
@@ -47,7 +47,7 @@ export default function GymsPage({ params }: { params: Promise<{ locale: string 
     if (!confirm(`باشگاه «${g.name}» و تمام عضویت‌ها و سوابق وابسته حذف شود؟`)) return;
     const r = await fetch(`${API}/v1/gyms/${g.id}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${localStorage.getItem("gymax_access_token") || ""}` },
+      headers: { Authorization: `Bearer ${localStorage.getItem("clubmax_access_token") || ""}` },
     });
     if (!r.ok) {
       setError((await r.json()).message);

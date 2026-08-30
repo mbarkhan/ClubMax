@@ -9,12 +9,12 @@ type SiteLogoProps = {
 
 export default function SiteLogo({href, className = "logo", priority = false}: SiteLogoProps) {
   return (
-    <Link href={href} className={className} aria-label="GyMax - صفحه اصلی">
+    <Link href={href} className={className} aria-label="ClubMax - صفحه اصلی">
       <Image
-        src="/images/gymax-logo.png"
-        alt="GyMax"
-        width={1983}
-        height={793}
+        src="/images/clubmax-logo.svg"
+        alt="ClubMax"
+        width={600}
+        height={180}
         priority={priority}
         sizes="(max-width: 768px) 112px, 132px"
       />

@@ -2,15 +2,15 @@ package main
 
 import (
 	"context"
-	"github.com/gymax/gymax/internal/config"
-	"github.com/gymax/gymax/internal/handler"
-	"github.com/gymax/gymax/internal/repository/postgres"
-	"github.com/gymax/gymax/internal/service"
-	"github.com/gymax/gymax/migrations"
 	"log"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/clubmax/clubmax/internal/config"
+	"github.com/clubmax/clubmax/internal/handler"
+	"github.com/clubmax/clubmax/internal/repository/postgres"
+	"github.com/clubmax/clubmax/internal/service"
 )
 
 type logNotifier struct{}
@@ -33,9 +33,6 @@ func main() {
 		log.Fatal(err)
 	}
 	defer store.DB.Close()
-	if err = migrations.Apply(ctx, store); err != nil {
-		log.Fatalf("database migration failed: %v", err)
-	}
 	users := service.NewUserService(store, postgres.OTPStore{Store: store}, store, logNotifier{}, cfg.OTPPepper)
 	gyms := service.NewGymService(postgres.GymStore{Store: store}, store)
 	finance := service.NewFinanceService(store, store, postgres.GymStore{Store: store})
@@ -44,7 +41,7 @@ func main() {
 	bootstrapAdmin(ctx, users)
 	go runWithdrawalSettlement(ctx, finance)
 	srv := &http.Server{Addr: cfg.BackendAddress(), Handler: handler.New(users, gyms, finance, messages, admin, cfg.JWTSecret, cfg.FrontendOrigin(), cfg.UploadDir), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
-	log.Printf("GyMax API listening on %s", srv.Addr)
+	log.Printf("ClubMax API listening on %s", srv.Addr)
 	log.Fatal(srv.ListenAndServe())
 }
 
@@ -80,9 +77,9 @@ func runWithdrawalSettlement(ctx context.Context, finance *service.FinanceServic
 }
 
 func bootstrapAdmin(ctx context.Context, s *service.UserService) {
-	name, user, pass := os.Getenv("GYMAX_ADMIN_NAME"), os.Getenv("GYMAX_ADMIN_USERNAME"), os.Getenv("GYMAX_ADMIN_PASSWORD")
+	name, user, pass := os.Getenv("CLUBMAX_ADMIN_NAME"), os.Getenv("CLUBMAX_ADMIN_USERNAME"), os.Getenv("CLUBMAX_ADMIN_PASSWORD")
 	if name == "" || user == "" || pass == "" {
-		log.Print("admin bootstrap skipped: administrator settings are missing from gymax.env")
+		log.Print("admin bootstrap skipped: administrator settings are missing from clubmax.env")
 		return
 	}
 	if _, e := s.EnsureAdmin(ctx, name, user, pass); e != nil {

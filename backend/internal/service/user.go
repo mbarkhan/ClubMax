@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/gymax/gymax/internal/domain"
-	"github.com/gymax/gymax/internal/reference"
-	"github.com/gymax/gymax/internal/repository"
+	"github.com/clubmax/clubmax/internal/domain"
+	"github.com/clubmax/clubmax/internal/reference"
+	"github.com/clubmax/clubmax/internal/repository"
 	"regexp"
 	"strings"
 	"time"
@@ -365,7 +365,7 @@ func (s *UserService) AuthenticateAdmin(ctx context.Context, username, password 
 	return u, nil
 }
 
-// EnsureAdmin makes gymax.env authoritative for the development bootstrap
+// EnsureAdmin makes clubmax.env authoritative for the development bootstrap
 // administrator. Changing its password takes effect after the next restart.
 func (s *UserService) EnsureAdmin(ctx context.Context, name, username, password string) (*domain.User, error) {
 	username = strings.TrimSpace(username)

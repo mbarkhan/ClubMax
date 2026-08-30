@@ -8,7 +8,7 @@ LOG_DIR="$RUN_DIR/logs"
 
 set -a
 # shellcheck disable=SC1091
-source "$PROJECT_DIR/gymax.env"
+source "$PROJECT_DIR/clubmax.env"
 set +a
 
 mkdir -p "$LOG_DIR"
@@ -78,40 +78,45 @@ start_service() {
 }
 
 if command -v docker >/dev/null 2>&1; then
-    if docker container inspect gymax-db >/dev/null 2>&1; then
-        docker start gymax-db >/dev/null
+    if docker container inspect clubmax-db >/dev/null 2>&1; then
+        docker start clubmax-db >/dev/null
     else
         docker run -d \
-            --name gymax-db \
-            -e POSTGRES_DB="$GYMAX_DATABASE_NAME" \
-            -e POSTGRES_USER="$GYMAX_DATABASE_USER" \
-            -e POSTGRES_PASSWORD="$GYMAX_DATABASE_PASSWORD" \
-            -p "$GYMAX_SERVER_IP:$GYMAX_DATABASE_PORT:5432" \
-            -v gymax_postgres_data:/var/lib/postgresql/data \
+            --name clubmax-db \
+            -e POSTGRES_DB="$CLUBMAX_DATABASE_NAME" \
+            -e POSTGRES_USER="$CLUBMAX_DATABASE_USER" \
+            -e POSTGRES_PASSWORD="$CLUBMAX_DATABASE_PASSWORD" \
+            -p "$CLUBMAX_SERVER_IP:$CLUBMAX_DATABASE_PORT:5432" \
+            -v clubmax_postgres_data:/var/lib/postgresql/data \
             postgres:17-alpine >/dev/null
     fi
-    echo "Waiting for the GyMax database..."
+    echo "Waiting for the ClubMax database..."
     for _ in {1..30}; do
-        if docker exec gymax-db pg_isready -U "$GYMAX_DATABASE_USER" -d "$GYMAX_DATABASE_NAME" >/dev/null 2>&1; then
+        if docker exec clubmax-db pg_isready -U "$CLUBMAX_DATABASE_USER" -d "$CLUBMAX_DATABASE_NAME" >/dev/null 2>&1; then
             break
         fi
         sleep 1
     done
-    if ! docker exec gymax-db pg_isready -U "$GYMAX_DATABASE_USER" -d "$GYMAX_DATABASE_NAME" >/dev/null 2>&1; then
-        echo "GyMax database did not become ready." >&2
+    if ! docker exec clubmax-db pg_isready -U "$CLUBMAX_DATABASE_USER" -d "$CLUBMAX_DATABASE_NAME" >/dev/null 2>&1; then
+        echo "ClubMax database did not become ready." >&2
         exit 1
     fi
 else
     echo "docker was not found; assuming PostgreSQL is already running." >&2
 fi
 
-if ! adopt_running_service backend "$GYMAX_BACKEND_PORT" "http://$GYMAX_SERVER_IP:$GYMAX_BACKEND_PORT/healthz"; then
+if ! adopt_running_service backend "$CLUBMAX_BACKEND_PORT" "http://$CLUBMAX_SERVER_IP:$CLUBMAX_BACKEND_PORT/healthz"; then
     start_service backend "$PROJECT_DIR/backend" go run main.go
 fi
 
-if ! adopt_running_service frontend "$GYMAX_FRONTEND_PORT" "http://$GYMAX_SERVER_IP:$GYMAX_FRONTEND_PORT/fa"; then
+if [[ ! -x "$PROJECT_DIR/frontend/node_modules/.bin/next" ]]; then
+    echo "Installing frontend dependencies..."
+    (cd "$PROJECT_DIR/frontend" && npm ci)
+fi
+
+if ! adopt_running_service frontend "$CLUBMAX_FRONTEND_PORT" "http://$CLUBMAX_SERVER_IP:$CLUBMAX_FRONTEND_PORT/fa"; then
     start_service frontend "$PROJECT_DIR/frontend" npm run dev
 fi
 
-echo "GyMax is available locally at http://127.0.0.1:$GYMAX_FRONTEND_PORT."
-echo "Local-network address: http://$GYMAX_PUBLIC_HOST:$GYMAX_FRONTEND_PORT (API: http://$GYMAX_PUBLIC_HOST:$GYMAX_BACKEND_PORT)."
+echo "ClubMax is available locally at http://127.0.0.1:$CLUBMAX_FRONTEND_PORT."
+echo "Local-network address: http://$CLUBMAX_PUBLIC_HOST:$CLUBMAX_FRONTEND_PORT (API: http://$CLUBMAX_PUBLIC_HOST:$CLUBMAX_BACKEND_PORT)."

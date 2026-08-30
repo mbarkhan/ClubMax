@@ -1,4 +1,4 @@
-module github.com/gymax/gymax
+module github.com/clubmax/clubmax
 
 go 1.23
 

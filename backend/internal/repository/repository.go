@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"github.com/gymax/gymax/internal/domain"
+	"github.com/clubmax/clubmax/internal/domain"
 	"time"
 )
 

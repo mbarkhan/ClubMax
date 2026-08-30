@@ -30,7 +30,7 @@ export default function AdminShell({
     [user, setUser] = useState<AdminUser | null>(null),
     [error, setError] = useState("");
   useEffect(() => {
-    const token = localStorage.getItem("gymax_access_token") || "";
+    const token = localStorage.getItem("clubmax_access_token") || "";
     if (!token) {
       router.replace(`/${locale}/login`);
       return;

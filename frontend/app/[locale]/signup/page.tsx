@@ -166,8 +166,8 @@ export default function Signup() {
       for (const [name, kind] of groups)
         for (const item of form.getAll(name))
           if (item instanceof File && item.size) await upload(result.access_token, kind, item);
-      localStorage.setItem("gymax_access_token", result.access_token);
-      localStorage.setItem("gymax_user", JSON.stringify(result.user));
+      localStorage.setItem("clubmax_access_token", result.access_token);
+      localStorage.setItem("clubmax_user", JSON.stringify(result.user));
       router.replace(`/${locale}/dashboard`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "خطا در ارتباط با سرور");
@@ -186,7 +186,7 @@ export default function Signup() {
       <form className="signup-card" onSubmit={submit}>
         <div className="signup-title">
           <span className="eyebrow">ساخت حساب جدید</span>
-          <h1>به جمع جیماکس بپیوندید</h1>
+          <h1>به جمع کلاب ماکس بپیوندید</h1>
           <p>اطلاعات ستاره‌دار برای ساخت حساب ضروری‌اند.</p>
         </div>
         <div className="role-cards">

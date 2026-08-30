@@ -13,7 +13,7 @@ frontend-build:
 	cd frontend && npm run build
 
 db-up:
-	docker compose --env-file gymax.env up -d db
+	docker compose --env-file clubmax.env up -d db
 
 db-down:
-	docker compose --env-file gymax.env down
+	docker compose --env-file clubmax.env down

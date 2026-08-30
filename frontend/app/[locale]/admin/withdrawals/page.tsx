@@ -35,7 +35,7 @@ export default function WithdrawalsPage({ params }: { params: Promise<{ locale: 
   const load = useCallback(
     () =>
       fetch(`${API}/v1/withdrawals`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("gymax_access_token") || ""}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem("clubmax_access_token") || ""}` },
       })
         .then(async (r) => {
           const d = await r.json();
@@ -65,7 +65,7 @@ export default function WithdrawalsPage({ params }: { params: Promise<{ locale: 
     const r = await fetch(`${API}/v1/withdrawals/${item.id}/review`, {
       method: "PUT",
       headers: {
-        Authorization: `Bearer ${localStorage.getItem("gymax_access_token") || ""}`,
+        Authorization: `Bearer ${localStorage.getItem("clubmax_access_token") || ""}`,
         "Content-Type": "application/json",
         "Accept-Language": "fa",
       },

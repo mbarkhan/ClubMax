@@ -10,7 +10,7 @@ import "../member.css";
 const locales = ["fa", "en"] as const;
 
 export const metadata: Metadata = {
-  title: "GyMax",
+  title: "ClubMax",
   description: "سامانه مدیریت باشگاه ورزشی",
   icons: {
     icon: "/icon.png",

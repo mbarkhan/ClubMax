@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
+	"github.com/clubmax/clubmax/internal/domain"
+	"github.com/clubmax/clubmax/internal/repository"
 	"github.com/google/uuid"
-	"github.com/gymax/gymax/internal/domain"
-	"github.com/gymax/gymax/internal/repository"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"strings"
-	"time"
 )
 
 type Store struct{ DB *pgxpool.Pool }
@@ -24,6 +25,10 @@ func New(ctx context.Context, url string) (*Store, error) {
 	if e = p.Ping(ctx); e != nil {
 		p.Close()
 		return nil, e
+	}
+	if _, e = p.Exec(ctx, domain.Schema); e != nil {
+		p.Close()
+		return nil, fmt.Errorf("initialize database schema: %w", e)
 	}
 	return &Store{p}, nil
 }
@@ -640,7 +645,7 @@ func (s *Store) CompleteDueWithdrawals(c context.Context, now time.Time) (int64,
 			return 0, dbError(e)
 		}
 		if v.fee > 0 {
-			if _, e = tx.Exec(c, `INSERT INTO wallet_entries(id,coach_id,entry_type,amount,reference_type,reference_id,description) VALUES(gen_random_uuid(),$1,$2,$3,'withdrawal',$4,'GyMax withdrawal fee')`, v.coach, domain.LedgerWithdrawalFee, -v.fee, v.id); e != nil {
+			if _, e = tx.Exec(c, `INSERT INTO wallet_entries(id,coach_id,entry_type,amount,reference_type,reference_id,description) VALUES(gen_random_uuid(),$1,$2,$3,'withdrawal',$4,'ClubMax withdrawal fee')`, v.coach, domain.LedgerWithdrawalFee, -v.fee, v.id); e != nil {
 				return 0, dbError(e)
 			}
 		}

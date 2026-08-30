@@ -1,11 +1,10 @@
 {
-  "name": "gymax-web",
+  "name": "clubmax-web",
   "private": true,
   "scripts": {
     "dev": "bash ./scripts/next-with-config.sh dev",
     "build": "bash ./scripts/next-with-config.sh build",
-    "start": "bash ./scripts/next-with-config.sh start",
-    "lint": "next lint"
+    "start": "bash ./scripts/next-with-config.sh start"
   },
   "dependencies": {
     "@fontsource/vazirmatn": "^5.2.6",

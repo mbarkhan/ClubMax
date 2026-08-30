@@ -31,7 +31,7 @@ export default function AdminPayments({ params }: { params: Promise<{ locale: st
       fetch(
         `${API}/v1/admin/payments?limit=100&offset=${page * 100}&q=${encodeURIComponent(query)}`,
         {
-          headers: { Authorization: `Bearer ${localStorage.getItem("gymax_access_token") || ""}` },
+          headers: { Authorization: `Bearer ${localStorage.getItem("clubmax_access_token") || ""}` },
         }
       )
         .then(async (r) => {

@@ -2,8 +2,8 @@ package service
 
 import (
 	"context"
-	"github.com/gymax/gymax/internal/domain"
-	"github.com/gymax/gymax/internal/repository"
+	"github.com/clubmax/clubmax/internal/domain"
+	"github.com/clubmax/clubmax/internal/repository"
 	"strings"
 )
 

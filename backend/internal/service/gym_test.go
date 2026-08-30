@@ -3,8 +3,8 @@ package service
 import (
 	"testing"
 
-	"github.com/gymax/gymax/internal/domain"
-	"github.com/gymax/gymax/internal/reference"
+	"github.com/clubmax/clubmax/internal/domain"
+	"github.com/clubmax/clubmax/internal/reference"
 )
 
 func TestValidateGym(t *testing.T) {

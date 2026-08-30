@@ -29,17 +29,17 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	c := Config{
-		ServerIP: required("GYMAX_SERVER_IP"), FrontendPort: required("GYMAX_FRONTEND_PORT"),
-		BindIP: required("GYMAX_BIND_IP"), PublicHost: required("GYMAX_PUBLIC_HOST"),
-		BackendPort: required("GYMAX_BACKEND_PORT"), DatabasePort: required("GYMAX_DATABASE_PORT"),
-		DatabaseName: required("GYMAX_DATABASE_NAME"), DatabaseUser: required("GYMAX_DATABASE_USER"),
-		DatabasePassword: required("GYMAX_DATABASE_PASSWORD"), OTPPepper: required("GYMAX_OTP_PEPPER"),
-		JWTSecret: required("GYMAX_JWT_SECRET"),
-		UploadDir: required("GYMAX_UPLOAD_DIR"),
+		ServerIP: required("CLUBMAX_SERVER_IP"), FrontendPort: required("CLUBMAX_FRONTEND_PORT"),
+		BindIP: required("CLUBMAX_BIND_IP"), PublicHost: required("CLUBMAX_PUBLIC_HOST"),
+		BackendPort: required("CLUBMAX_BACKEND_PORT"), DatabasePort: required("CLUBMAX_DATABASE_PORT"),
+		DatabaseName: required("CLUBMAX_DATABASE_NAME"), DatabaseUser: required("CLUBMAX_DATABASE_USER"),
+		DatabasePassword: required("CLUBMAX_DATABASE_PASSWORD"), OTPPepper: required("CLUBMAX_OTP_PEPPER"),
+		JWTSecret: required("CLUBMAX_JWT_SECRET"),
+		UploadDir: required("CLUBMAX_UPLOAD_DIR"),
 	}
 	if c.ServerIP == "" || c.BindIP == "" || c.PublicHost == "" || c.FrontendPort == "" || c.BackendPort == "" || c.DatabasePort == "" ||
 		c.DatabaseName == "" || c.DatabaseUser == "" || c.DatabasePassword == "" || c.OTPPepper == "" || c.JWTSecret == "" || c.UploadDir == "" {
-		return Config{}, fmt.Errorf("gymax.env contains an empty required value")
+		return Config{}, fmt.Errorf("clubmax.env contains an empty required value")
 	}
 	return c, nil
 }
@@ -58,8 +58,8 @@ func (c Config) DatabaseURL() string {
 }
 
 func loadFile() error {
-	paths := []string{"../gymax.env", "gymax.env"}
-	if explicit := os.Getenv("GYMAX_CONFIG_FILE"); explicit != "" {
+	paths := []string{"../clubmax.env", "clubmax.env"}
+	if explicit := os.Getenv("CLUBMAX_CONFIG_FILE"); explicit != "" {
 		paths = append([]string{explicit}, paths...)
 	}
 	for _, path := range paths {
@@ -88,7 +88,7 @@ func loadFile() error {
 		}
 		return scanner.Err()
 	}
-	return fmt.Errorf("gymax.env was not found")
+	return fmt.Errorf("clubmax.env was not found")
 }
 
 func required(key string) string { return strings.TrimSpace(os.Getenv(key)) }

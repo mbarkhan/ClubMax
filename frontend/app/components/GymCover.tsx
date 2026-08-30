@@ -7,7 +7,7 @@ const API = process.env.NEXT_PUBLIC_API_URL!;
 export default function GymCover({gymId}: {gymId: string}) {
   const [url,setURL] = useState("");
   useEffect(()=>{
-    const token=localStorage.getItem("gymax_access_token")||"";
+    const token=localStorage.getItem("clubmax_access_token")||"";
     fetch(`${API}/v1/gyms/${gymId}/images`,{headers:{Authorization:`Bearer ${token}`}})
       .then(response=>response.ok?response.json():[])
       .then(images=>setURL(images?.[0]?.storage_key?`${API}/media/${images[0].storage_key}`:""))

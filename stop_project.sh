@@ -7,7 +7,7 @@ RUN_DIR="$PROJECT_DIR/.local/run"
 
 set -a
 # shellcheck disable=SC1091
-source "$PROJECT_DIR/gymax.env"
+source "$PROJECT_DIR/clubmax.env"
 set +a
 
 stop_service() {
@@ -53,13 +53,13 @@ stop_port_listener() {
 
 stop_service frontend
 stop_service backend
-stop_port_listener frontend "$GYMAX_FRONTEND_PORT"
-stop_port_listener backend "$GYMAX_BACKEND_PORT"
+stop_port_listener frontend "$CLUBMAX_FRONTEND_PORT"
+stop_port_listener backend "$CLUBMAX_BACKEND_PORT"
 
-if command -v docker >/dev/null 2>&1 && docker container inspect gymax-db >/dev/null 2>&1; then
-    docker stop gymax-db >/dev/null
+if command -v docker >/dev/null 2>&1 && docker container inspect clubmax-db >/dev/null 2>&1; then
+    docker stop clubmax-db >/dev/null
 else
-    echo "GyMax PostgreSQL container is not running."
+    echo "ClubMax PostgreSQL container is not running."
 fi
 
-echo "GyMax stopped."
+echo "ClubMax stopped."

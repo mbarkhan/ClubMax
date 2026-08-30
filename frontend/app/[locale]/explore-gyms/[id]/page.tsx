@@ -14,7 +14,7 @@ type Image={id:string;storage_key:string};
 export default function GymDetail({params}:{params:Promise<{locale:string;id:string}>}){
   const{locale,id}=use(params),router=useRouter();
   const[gym,setGym]=useState<Gym|null>(null),[images,setImages]=useState<Image[]>([]),[error,setError]=useState(""),[paying,setPaying]=useState(false),[tracking,setTracking]=useState("");
-  const token=()=>localStorage.getItem("gymax_access_token")||"";
+  const token=()=>localStorage.getItem("clubmax_access_token")||"";
   const load=useCallback(()=>{Promise.all([fetch(`${API}/v1/gyms/catalog/${id}`,{headers:{Authorization:`Bearer ${token()}`}}),fetch(`${API}/v1/gyms/${id}/images`,{headers:{Authorization:`Bearer ${token()}`}})]).then(async([detail,pictures])=>{if(detail.status===401||detail.status===403){router.replace(`/${locale}/login`);return}const data=await detail.json();if(!detail.ok)throw new Error(data.message);setGym(data);if(pictures.ok)setImages(await pictures.json())}).catch(reason=>setError(reason instanceof Error?reason.message:"دریافت اطلاعات باشگاه انجام نشد."))},[id,locale,router]);
   useEffect(load,[load]);
   async function payMonthlyDues(){setPaying(true);setError("");try{const response=await fetch(`${API}/v1/gyms/${id}/monthly-dues/pay`,{method:"POST",headers:{Authorization:`Bearer ${token()}`,"Content-Type":"application/json","Accept-Language":"fa"}}),data=await response.json();if(!response.ok)throw new Error(data.message||"پرداخت شهریه انجام نشد.");setTracking(data.tracking_id);await load()}catch(reason){setError(reason instanceof Error?reason.message:"پرداخت شهریه انجام نشد.")}finally{setPaying(false)}}

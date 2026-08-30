@@ -19,7 +19,7 @@ export default function FinancePage({ params }: { params: Promise<{ locale: stri
     [message, setMessage] = useState(""),
     [error, setError] = useState("");
   useEffect(() => {
-    const headers = { Authorization: `Bearer ${localStorage.getItem("gymax_access_token") || ""}` };
+    const headers = { Authorization: `Bearer ${localStorage.getItem("clubmax_access_token") || ""}` };
     Promise.all([
       fetch(`${API}/v1/finance/policy`, { headers }),
       fetch(`${API}/v1/admin/overview`, { headers }),
@@ -40,7 +40,7 @@ export default function FinancePage({ params }: { params: Promise<{ locale: stri
     const r = await fetch(`${API}/v1/finance/policy`, {
       method: "PUT",
       headers: {
-        Authorization: `Bearer ${localStorage.getItem("gymax_access_token") || ""}`,
+        Authorization: `Bearer ${localStorage.getItem("clubmax_access_token") || ""}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(policy),

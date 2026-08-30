@@ -32,7 +32,7 @@ export default function Gyms() {
     [error, setError] = useState(""),
     [open, setOpen] = useState(false),
     [sport, setSport] = useState("");
-  const token = () => localStorage.getItem("gymax_access_token") || "";
+  const token = () => localStorage.getItem("clubmax_access_token") || "";
   async function load() {
     const r = await fetch(`${API}/v1/gyms`, { headers: { Authorization: `Bearer ${token()}` } });
     if (r.status === 401) {
@@ -44,7 +44,7 @@ export default function Gyms() {
     else setError(data.message);
   }
   useEffect(() => {
-    setRole(JSON.parse(localStorage.getItem("gymax_user") || "{}").role || "");
+    setRole(JSON.parse(localStorage.getItem("clubmax_user") || "{}").role || "");
     load();
   }, []);
   async function submit(e: FormEvent<HTMLFormElement>) {

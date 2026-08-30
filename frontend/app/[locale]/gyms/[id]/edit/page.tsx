@@ -16,7 +16,7 @@ type Gym = {id:string;name:string;province:string;city:string;address:string;pho
 export default function EditGym({params}: {params: Promise<{locale:string;id:string}>}) {
   const {locale,id} = use(params), router = useRouter();
   const [gym,setGym] = useState<Gym|null>(null), [existingImages,setExistingImages]=useState<{id:string;url:string}[]>([]), [error,setError] = useState(""), [saving,setSaving] = useState(false);
-  const token = () => localStorage.getItem("gymax_access_token") || "";
+  const token = () => localStorage.getItem("clubmax_access_token") || "";
   useEffect(()=>{fetch(`${API}/v1/gyms/${id}`,{headers:{Authorization:`Bearer ${token()}`}}).then(async response=>{if(response.status===401){router.replace(`/${locale}/login`);return}const data=await response.json();if(!response.ok)throw new Error(data.message);setGym(data)}).catch(reason=>setError(reason instanceof Error?reason.message:"دریافت اطلاعات باشگاه انجام نشد."))},[id,locale,router]);
   useEffect(()=>{fetch(`${API}/v1/gyms/${id}/images`,{headers:{Authorization:`Bearer ${token()}`}}).then(async response=>response.ok?response.json():[]).then((images:GymImage[])=>setExistingImages(images.map(image=>({id:image.id,url:`${API}/media/${image.storage_key}`})))).catch(()=>setExistingImages([]))},[id]);
   async function deleteImage(imageID:string){setError("");const response=await fetch(`${API}/v1/gyms/${id}/images/${imageID}`,{method:"DELETE",headers:{Authorization:`Bearer ${token()}`}});if(!response.ok){const data=await response.json();setError(data.message||"حذف تصویر انجام نشد.");return}setExistingImages(images=>images.filter(image=>image.id!==imageID))}

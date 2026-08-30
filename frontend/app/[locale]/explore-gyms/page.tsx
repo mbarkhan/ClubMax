@@ -45,7 +45,7 @@ export default function ExploreGyms() {
       mode: "",
     });
   useEffect(() => {
-    const token = localStorage.getItem("gymax_access_token") || "";
+    const token = localStorage.getItem("clubmax_access_token") || "";
     fetch(`${API}/v1/gyms/catalog`, { headers: { Authorization: `Bearer ${token}` } })
       .then(async (response) => {
         if (response.status === 401 || response.status === 403) {

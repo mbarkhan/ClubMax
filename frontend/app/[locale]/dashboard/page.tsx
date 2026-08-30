@@ -52,7 +52,7 @@ export default function Dashboard({ params }: { params: Promise<{ locale: string
   const [user, setUser] = useState<User | null>(null),
     [overview, setOverview] = useState<Overview | null>(null);
   useEffect(() => {
-    const token = localStorage.getItem("gymax_access_token");
+    const token = localStorage.getItem("clubmax_access_token");
     if (!token) {
       router.replace(`/${locale}/login`);
       return;
@@ -62,7 +62,7 @@ export default function Dashboard({ params }: { params: Promise<{ locale: string
         if (!r.ok) throw 0;
         const u = await r.json();
         setUser(u);
-        localStorage.setItem("gymax_user", JSON.stringify(u));
+        localStorage.setItem("clubmax_user", JSON.stringify(u));
         if (u.role === "admin")
           return fetch(`${API}/v1/admin/overview`, {
             headers: { Authorization: `Bearer ${token}` },
@@ -180,7 +180,7 @@ function AthleteWorkspace({ locale }: { locale: string }) {
   const [gyms, setGyms] = useState<Gym[]>([]),
     [error, setError] = useState("");
   useEffect(() => {
-    const token = localStorage.getItem("gymax_access_token") || "";
+    const token = localStorage.getItem("clubmax_access_token") || "";
     fetch(`${API}/v1/gyms/catalog`, { headers: { Authorization: `Bearer ${token}` } })
       .then(async (response) => {
         const data = await response.json();
