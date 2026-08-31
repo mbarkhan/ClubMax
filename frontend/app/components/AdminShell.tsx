@@ -21,7 +21,7 @@ export default function AdminShell({
   children,
 }: {
   locale: string;
-  active: "dashboard" | "users" | "gyms" | "finance" | "payments" | "withdrawals";
+  active: "dashboard" | "users" | "gyms" | "finance" | "payments" | "withdrawals" | "backups";
   title: string;
   kicker: string;
   children: ReactNode;

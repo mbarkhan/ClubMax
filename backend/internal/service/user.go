@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/clubmax/clubmax/internal/domain"
 	"github.com/clubmax/clubmax/internal/reference"
 	"github.com/clubmax/clubmax/internal/repository"
+	"github.com/google/uuid"
 	"regexp"
 	"strings"
 	"time"
@@ -454,7 +454,9 @@ func validateUser(u *domain.User) error {
 func validEducation(v domain.Education) bool {
 	return v == domain.EducationBelowDiploma || v == domain.EducationDiploma || v == domain.EducationAssociate || v == domain.EducationBachelor || v == domain.EducationMaster || v == domain.EducationDoctorate
 }
-func validGender(v domain.Gender) bool { return v == domain.GenderMale || v == domain.GenderFemale }
+func validGender(v domain.Gender) bool {
+	return v == domain.GenderMale || v == domain.GenderFemale || v == domain.GenderOther
+}
 func validMaritalStatus(v domain.MaritalStatus) bool {
 	return v == domain.MaritalUnknown || v == domain.MaritalSingle || v == domain.MaritalMarried
 }

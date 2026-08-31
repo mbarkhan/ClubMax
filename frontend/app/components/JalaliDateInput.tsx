@@ -36,7 +36,7 @@ function parseInitial(value: string, minYear: number, maxYear: number): JalaliVa
 
 export default function JalaliDateInput({
   name,
-  label = "تاریخ شمسی",
+  label = "تاریخ تولد",
   required = false,
   minYear = 1320,
   maxYear = 1450,

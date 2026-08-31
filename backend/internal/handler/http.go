@@ -4,20 +4,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/go-chi/chi/v5"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
-	"github.com/clubmax/clubmax/internal/domain"
-	"github.com/clubmax/clubmax/internal/reference"
-	"github.com/clubmax/clubmax/internal/repository"
-	"github.com/clubmax/clubmax/internal/service"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/clubmax/clubmax/internal/domain"
+	"github.com/clubmax/clubmax/internal/reference"
+	"github.com/clubmax/clubmax/internal/repository"
+	"github.com/clubmax/clubmax/internal/service"
+	"github.com/go-chi/chi/v5"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 type API struct {
@@ -26,12 +28,13 @@ type API struct {
 	finance   *service.FinanceService
 	messages  *service.MessageService
 	admin     *service.AdminService
+	backups   *service.BackupService
 	jwtKey    []byte
 	uploadDir string
 }
 
-func New(u *service.UserService, c *service.GymService, f *service.FinanceService, m *service.MessageService, admin *service.AdminService, jwtSecret, frontendOrigin, uploadDir string) http.Handler {
-	a := &API{users: u, gyms: c, finance: f, messages: m, admin: admin, jwtKey: []byte(jwtSecret), uploadDir: uploadDir}
+func New(u *service.UserService, c *service.GymService, f *service.FinanceService, m *service.MessageService, admin *service.AdminService, backups *service.BackupService, jwtSecret, frontendOrigin, uploadDir string) http.Handler {
+	a := &API{users: u, gyms: c, finance: f, messages: m, admin: admin, backups: backups, jwtKey: []byte(jwtSecret), uploadDir: uploadDir}
 	r := chi.NewRouter()
 	r.Use(recoverer, securityHeaders, locale, cors(frontendOrigin))
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) { write(w, 200, map[string]string{"status": "ok"}) })
@@ -77,6 +80,10 @@ func New(u *service.UserService, c *service.GymService, f *service.FinanceServic
 			r.With(requireRole(domain.RoleAdmin)).Get("/admin/overview", a.adminOverview)
 			r.With(requireRole(domain.RoleAdmin)).Get("/admin/gyms", a.adminGyms)
 			r.With(requireRole(domain.RoleAdmin)).Get("/admin/payments", a.adminPayments)
+			r.With(requireRole(domain.RoleAdmin)).Get("/admin/backups", a.backupStatus)
+			r.With(requireRole(domain.RoleAdmin)).Put("/admin/backups/policy", a.updateBackupPolicy)
+			r.With(requireRole(domain.RoleAdmin)).Post("/admin/backups/download", a.downloadBackup)
+			r.With(requireRole(domain.RoleAdmin)).Post("/admin/backups/restore", a.restoreBackup)
 			r.With(requireRole(domain.RoleCoach)).Post("/gyms", a.createGym)
 			r.With(requireRole(domain.RoleAthlete)).Get("/gyms/catalog", a.gymCatalog)
 			r.With(requireRole(domain.RoleAthlete)).Get("/gyms/catalog/{id}", a.gymCatalogItem)
@@ -168,6 +175,7 @@ func cors(allowedOrigin string) func(http.Handler) http.Handler {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept-Language")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition, Content-Length")
 				w.Header().Add("Vary", "Origin")
 			}
 			if r.Method == http.MethodOptions {
@@ -622,6 +630,77 @@ func respond(w http.ResponseWriter, e error, status int, v any) {
 	}
 	write(w, status, v)
 }
+
+func (a *API) backupStatus(w http.ResponseWriter, r *http.Request) {
+	status, err := a.backups.Status(r.Context())
+	respond(w, err, http.StatusOK, status)
+}
+
+func (a *API) updateBackupPolicy(w http.ResponseWriter, r *http.Request) {
+	var policy domain.BackupPolicy
+	if decode(w, r, &policy) != nil {
+		return
+	}
+	updated, err := a.backups.UpdatePolicy(r.Context(), policy)
+	respond(w, err, http.StatusOK, updated)
+}
+
+func (a *API) downloadBackup(w http.ResponseWriter, r *http.Request) {
+	// A complete archive can take longer than ordinary JSON requests.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(30 * time.Minute))
+	includeUploads := r.URL.Query().Get("include_files") != "false"
+	backup, err := a.backups.CreateFullBackup(r.Context(), includeUploads)
+	if err != nil {
+		problem(w, err)
+		return
+	}
+	defer os.Remove(backup.Path)
+
+	file, err := os.Open(backup.Path)
+	if err != nil {
+		problem(w, err)
+		return
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		problem(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, backup.Name))
+	w.Header().Set("Content-Length", strconv.FormatInt(backup.Size, 10))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.ServeContent(w, r, backup.Name, info.ModTime(), file)
+}
+
+func (a *API) restoreBackup(w http.ResponseWriter, r *http.Request) {
+	const maxBackupUpload = int64(5 << 30)
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(30 * time.Minute))
+	r.Body = http.MaxBytesReader(w, r.Body, maxBackupUpload)
+	file, _, err := r.FormFile("backup")
+	if err != nil {
+		problem(w, domain.ErrInvalidBackup)
+		return
+	}
+	defer file.Close()
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
+	}
+	result, err := a.backups.RestoreFullBackup(r.Context(), file)
+	if err != nil {
+		log.Printf("backup restore requested by administrator %s failed: %v", current(r).ID, err)
+		problem(w, err)
+		return
+	}
+	log.Printf("administrator %s restored a ClubMax backup created at %s", current(r).ID, result.BackupCreatedAt.Format(time.RFC3339))
+	messageKey := "backup_database_restored"
+	if result.UploadsRestored {
+		messageKey = "backup_restored"
+	}
+	write(w, http.StatusOK, map[string]any{"message": message(w, messageKey), "result": result})
+}
+
 func problem(w http.ResponseWriter, e error) {
 	status := 500
 	code := "internal_error"
@@ -654,6 +733,10 @@ func problem(w http.ResponseWriter, e error) {
 		status, code = 409, "invalid_state"
 	case errors.Is(e, domain.ErrMessageRecipient):
 		status, code = 403, "message_recipient"
+	case errors.Is(e, domain.ErrBackupInProgress):
+		status, code = 409, "backup_in_progress"
+	case errors.Is(e, domain.ErrInvalidBackup):
+		status, code = 400, "invalid_backup"
 	}
 	payload := map[string]string{"error": code, "message": message(w, code)}
 	var validation *domain.ValidationError

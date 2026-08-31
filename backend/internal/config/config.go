@@ -6,22 +6,28 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 )
 
 type Config struct {
-	ServerIP         string
-	BindIP           string
-	PublicHost       string
-	FrontendPort     string
-	BackendPort      string
-	DatabasePort     string
-	DatabaseName     string
-	DatabaseUser     string
-	DatabasePassword string
-	OTPPepper        string
-	JWTSecret        string
-	UploadDir        string
+	ServerIP          string
+	BindIP            string
+	PublicHost        string
+	FrontendPort      string
+	BackendPort       string
+	DatabasePort      string
+	DatabaseName      string
+	DatabaseUser      string
+	DatabasePassword  string
+	OTPPepper         string
+	JWTSecret         string
+	UploadDir         string
+	BackupDir         string
+	DatabaseContainer string
+	BackupHours       []int
+	BackupRetention   int
 }
 
 func Load() (Config, error) {
@@ -34,14 +40,43 @@ func Load() (Config, error) {
 		BackendPort: required("CLUBMAX_BACKEND_PORT"), DatabasePort: required("CLUBMAX_DATABASE_PORT"),
 		DatabaseName: required("CLUBMAX_DATABASE_NAME"), DatabaseUser: required("CLUBMAX_DATABASE_USER"),
 		DatabasePassword: required("CLUBMAX_DATABASE_PASSWORD"), OTPPepper: required("CLUBMAX_OTP_PEPPER"),
-		JWTSecret: required("CLUBMAX_JWT_SECRET"),
-		UploadDir: required("CLUBMAX_UPLOAD_DIR"),
+		JWTSecret:         required("CLUBMAX_JWT_SECRET"),
+		UploadDir:         required("CLUBMAX_UPLOAD_DIR"),
+		BackupDir:         required("CLUBMAX_BACKUP_DIR"),
+		DatabaseContainer: required("CLUBMAX_DATABASE_CONTAINER"),
 	}
 	if c.ServerIP == "" || c.BindIP == "" || c.PublicHost == "" || c.FrontendPort == "" || c.BackendPort == "" || c.DatabasePort == "" ||
-		c.DatabaseName == "" || c.DatabaseUser == "" || c.DatabasePassword == "" || c.OTPPepper == "" || c.JWTSecret == "" || c.UploadDir == "" {
+		c.DatabaseName == "" || c.DatabaseUser == "" || c.DatabasePassword == "" || c.OTPPepper == "" || c.JWTSecret == "" || c.UploadDir == "" || c.BackupDir == "" {
 		return Config{}, fmt.Errorf("clubmax.env contains an empty required value")
 	}
+	var err error
+	if c.BackupHours, err = parseHours(required("CLUBMAX_BACKUP_HOURS")); err != nil {
+		return Config{}, err
+	}
+	if c.BackupRetention, err = strconv.Atoi(required("CLUBMAX_BACKUP_RETENTION")); err != nil || c.BackupRetention < 1 {
+		return Config{}, fmt.Errorf("CLUBMAX_BACKUP_RETENTION must be a positive integer")
+	}
 	return c, nil
+}
+
+func parseHours(value string) ([]int, error) {
+	seen := make(map[int]bool)
+	var hours []int
+	for _, item := range strings.Split(value, ",") {
+		hour, err := strconv.Atoi(strings.TrimSpace(item))
+		if err != nil || hour < 0 || hour > 23 {
+			return nil, fmt.Errorf("CLUBMAX_BACKUP_HOURS must contain comma-separated hours between 0 and 23")
+		}
+		if !seen[hour] {
+			seen[hour] = true
+			hours = append(hours, hour)
+		}
+	}
+	if len(hours) == 0 {
+		return nil, fmt.Errorf("CLUBMAX_BACKUP_HOURS is required")
+	}
+	sort.Ints(hours)
+	return hours, nil
 }
 
 func (c Config) BackendAddress() string { return c.BindIP + ":" + c.BackendPort }

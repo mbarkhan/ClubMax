@@ -13,13 +13,13 @@ type SidebarUser = {
   face_image_id?: string;
 };
 type ItemKey =
-  "dashboard" | "users" | "gyms" | "finance" | "payments" | "withdrawals" | "wallet" | "profile";
+  "dashboard" | "users" | "gyms" | "finance" | "payments" | "withdrawals" | "backups" | "wallet" | "profile";
 const roleNames = { admin: "مدیر سایت", coach: "مربی", athlete: "ورزشکار" };
 
 function NavIcon({
   name,
 }: {
-  name: "dashboard" | "users" | "gyms" | "wallet" | "explore" | "payments" | "messages" | "profile";
+  name: "dashboard" | "users" | "gyms" | "wallet" | "explore" | "payments" | "messages" | "profile" | "backup";
 }) {
   const paths = {
     dashboard: (
@@ -70,6 +70,13 @@ function NavIcon({
       <>
         <circle cx="12" cy="8" r="4" />
         <path d="M4 21c.8-4.1 3.5-6 8-6s7.2 1.9 8 6" />
+      </>
+    ),
+    backup: (
+      <>
+        <ellipse cx="12" cy="5" rx="7" ry="3" />
+        <path d="M5 5v6c0 1.7 3.1 3 7 3 .7 0 1.4 0 2-.1M5 11v6c0 1.7 3.1 3 7 3" />
+        <path d="M18 12v8M15 17l3 3 3-3" />
       </>
     ),
   };
@@ -130,6 +137,9 @@ export default function DashboardSidebar({
             >
               مالی
             </Link>
+            <Link className={active === "backups" ? "active" : ""} href={`/${locale}/admin/backups`}>
+              پشتیبان‌گیری
+            </Link>
           </>
         )}
         {user.role === "coach" && (
@@ -171,6 +181,8 @@ export default function DashboardSidebar({
         {user.role === "admin" && item("gyms", `/${locale}/admin/gyms`, "مدیریت باشگاه‌ها", "gyms")}
         {user.role === "admin" &&
           item("finance", `/${locale}/admin/finance`, "مدیریت مالی", "wallet")}
+        {user.role === "admin" &&
+          item("backups", `/${locale}/admin/backups`, "پشتیبان‌گیری", "backup")}
         {user.role === "coach" && item("gyms", `/${locale}/gyms`, "باشگاه‌های من", "gyms")}
         {user.role === "coach" && item("wallet", `/${locale}/wallet`, "کیف پول و برداشت", "wallet")}
         {user.role === "athlete" && plain(`/${locale}/explore-gyms`, "باشگاه‌ها", "explore")}

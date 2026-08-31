@@ -234,6 +234,7 @@ export default function Signup() {
               <option value="">انتخاب کنید</option>
               <option value="male">مرد</option>
               <option value="female">زن</option>
+              <option value="other">سایر</option>
             </select>
           </Field>
           <Field label="تحصیلات" name="education" required>

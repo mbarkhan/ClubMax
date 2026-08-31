@@ -26,4 +26,6 @@ var (
 	ErrWithdrawalLimit    = errors.New("withdrawal amount is outside policy limits")
 	ErrInvalidState       = errors.New("invalid state transition")
 	ErrMessageRecipient   = errors.New("message recipient is not allowed")
+	ErrBackupInProgress   = errors.New("a backup is already in progress")
+	ErrInvalidBackup      = errors.New("invalid or incompatible backup archive")
 )

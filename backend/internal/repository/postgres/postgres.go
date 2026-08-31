@@ -350,6 +350,15 @@ func (s *Store) SetPolicy(c context.Context, p domain.WithdrawalPolicy) error {
 	_, e := s.DB.Exec(c, `INSERT INTO withdrawal_policy(id,min_amount,max_amount,fee_bps,updated_at) VALUES(true,$1,$2,$3,now()) ON CONFLICT(id) DO UPDATE SET min_amount=EXCLUDED.min_amount,max_amount=EXCLUDED.max_amount,fee_bps=EXCLUDED.fee_bps,updated_at=now()`, p.MinAmount, p.MaxAmount, p.FeeBPS)
 	return dbError(e)
 }
+func (s *Store) GetBackupPolicy(c context.Context) (domain.BackupPolicy, error) {
+	var p domain.BackupPolicy
+	e := s.DB.QueryRow(c, `SELECT schedule_minutes,retention,updated_at FROM backup_policy WHERE id=true`).Scan(&p.ScheduleMinutes, &p.Retention, &p.UpdatedAt)
+	return p, dbError(e)
+}
+func (s *Store) SetBackupPolicy(c context.Context, p domain.BackupPolicy) error {
+	_, e := s.DB.Exec(c, `INSERT INTO backup_policy(id,schedule_minutes,retention,updated_at) VALUES(true,$1,$2,now()) ON CONFLICT(id) DO UPDATE SET schedule_minutes=EXCLUDED.schedule_minutes,retention=EXCLUDED.retention,updated_at=now()`, p.ScheduleMinutes, p.Retention)
+	return dbError(e)
+}
 func (s *Store) Balance(c context.Context, coach string) (int64, error) {
 	var v int64
 	e := s.DB.QueryRow(c, `SELECT COALESCE(sum(amount),0) FROM wallet_entries WHERE coach_id=$1`, coach).Scan(&v)

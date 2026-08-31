@@ -1,6 +1,21 @@
 package service
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/clubmax/clubmax/internal/domain"
+)
+
+func TestValidGender(t *testing.T) {
+	for _, gender := range []domain.Gender{domain.GenderMale, domain.GenderFemale, domain.GenderOther} {
+		if !validGender(gender) {
+			t.Errorf("expected gender %q to be valid", gender)
+		}
+	}
+	if validGender(domain.Gender("invalid")) {
+		t.Error("expected unknown gender to be invalid")
+	}
+}
 
 func TestNormalizeIranianIBAN(t *testing.T) {
 	tests := []struct {

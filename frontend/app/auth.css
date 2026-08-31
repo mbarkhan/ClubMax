@@ -513,6 +513,43 @@ textarea:focus {
 .gym-card-actions button {
   margin: 0;
 }
+.gym-card .gym-card-delete {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #f2cccc;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #b43b3b;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(90, 25, 25, 0.12);
+  transition: background 0.15s, color 0.15s, transform 0.15s;
+}
+.gym-card .gym-card-delete:hover {
+  background: #b43b3b;
+  color: #fff;
+  transform: translateY(-1px);
+}
+.gym-card .gym-card-delete:focus-visible {
+  outline: 3px solid #f2baba;
+  outline-offset: 2px;
+}
+.gym-card .gym-card-delete svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .gym-card-main:focus-visible {
   outline: 3px solid #b9dfcf;
   outline-offset: -3px;

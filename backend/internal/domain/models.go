@@ -27,6 +27,7 @@ const (
 	EducationDoctorate    Education     = "doctorate"
 	GenderMale            Gender        = "male"
 	GenderFemale          Gender        = "female"
+	GenderOther           Gender        = "other"
 	MaritalUnknown        MaritalStatus = "unknown"
 	MaritalSingle         MaritalStatus = "single"
 	MaritalMarried        MaritalStatus = "married"
@@ -283,6 +284,12 @@ type WithdrawalPolicy struct {
 	MaxAmount int64     `json:"max_amount"`
 	FeeBPS    int64     `json:"fee_bps"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type BackupPolicy struct {
+	ScheduleMinutes []int32   `json:"schedule_minutes"`
+	Retention       int       `json:"retention"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type AdminOverview struct {

@@ -13,7 +13,7 @@ export default function SiteLogo({href, className = "logo", priority = false}: S
       <Image
         src="/images/clubmax-logo.svg"
         alt="ClubMax"
-        width={600}
+        width={500}
         height={180}
         priority={priority}
         sizes="(max-width: 768px) 112px, 132px"

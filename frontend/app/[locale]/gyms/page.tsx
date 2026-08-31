@@ -225,6 +225,19 @@ export default function Gyms() {
             items.map((g) => (
               <article className="gym-card" key={g.id}>
                 <GymCover gymId={g.id} />
+                {role === "coach" && (
+                  <button
+                    type="button"
+                    className="gym-card-delete"
+                    onClick={() => remove(g.id)}
+                    aria-label={`حذف ${g.name}`}
+                    title="حذف باشگاه"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" />
+                    </svg>
+                  </button>
+                )}
                 <Link className="gym-card-main" href={`/${locale}/gyms/${g.id}/athletes`}>
                   <div>
                     <span>
@@ -250,7 +263,6 @@ export default function Gyms() {
                     >
                       ✎
                     </Link>
-                    <button onClick={() => remove(g.id)}>حذف باشگاه</button>
                   </div>
                 )}
               </article>

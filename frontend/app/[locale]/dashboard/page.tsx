@@ -136,6 +136,12 @@ function Admin({ overview, locale }: { overview: Overview | null; locale: string
           text="تنظیم کارمزد و حدود برداشت، بررسی درخواست مربیان و ثبت کد پیگیری بانکی."
           href={`/${locale}/admin/finance`}
         />
+        <AdminModule
+          icon="ذ"
+          title="پشتیبان‌گیری"
+          text="مشاهده وضعیت پشتیبان‌های زمان‌بندی‌شده و دریافت آرشیو کامل پایگاه داده و فایل‌ها."
+          href={`/${locale}/admin/backups`}
+        />
       </div>
     </>
   );

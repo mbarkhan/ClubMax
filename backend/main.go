@@ -38,9 +38,19 @@ func main() {
 	finance := service.NewFinanceService(store, store, postgres.GymStore{Store: store})
 	messages := service.NewMessageService(postgres.MessageStore{Store: store}, store)
 	admin := service.NewAdminService(store)
+	backups, err := service.NewBackupService(service.BackupConfig{
+		DatabaseHost: cfg.ServerIP, DatabasePort: cfg.DatabasePort, DatabaseName: cfg.DatabaseName,
+		DatabaseUser: cfg.DatabaseUser, DatabasePassword: cfg.DatabasePassword,
+		DatabaseContainer: cfg.DatabaseContainer, UploadDir: cfg.UploadDir, BackupDir: cfg.BackupDir,
+		Hours: cfg.BackupHours, Retention: cfg.BackupRetention,
+	}, store)
+	if err != nil {
+		log.Fatal(err)
+	}
 	bootstrapAdmin(ctx, users)
 	go runWithdrawalSettlement(ctx, finance)
-	srv := &http.Server{Addr: cfg.BackendAddress(), Handler: handler.New(users, gyms, finance, messages, admin, cfg.JWTSecret, cfg.FrontendOrigin(), cfg.UploadDir), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
+	go backups.Run(ctx, log.Printf)
+	srv := &http.Server{Addr: cfg.BackendAddress(), Handler: handler.New(users, gyms, finance, messages, admin, backups, cfg.JWTSecret, cfg.FrontendOrigin(), cfg.UploadDir), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("ClubMax API listening on %s", srv.Addr)
 	log.Fatal(srv.ListenAndServe())
 }

@@ -253,6 +253,7 @@ export default function Profile({ params }: { params: Promise<{ locale: string }
             <select name="gender" required defaultValue={user.gender}>
               <option value="male">مرد</option>
               <option value="female">زن</option>
+              <option value="other">سایر</option>
             </select>
           </label>
           <label>
