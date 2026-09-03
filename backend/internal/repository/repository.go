@@ -37,6 +37,7 @@ type GymRepository interface {
 	ListForAthlete(context.Context, string) ([]domain.Gym, error)
 	ListCatalog(context.Context, string, int, int) ([]domain.GymCatalogItem, error)
 	GetCatalogItem(context.Context, string, string, int, int) (*domain.GymCatalogItem, error)
+	ListShowcase(context.Context) ([]domain.GymShowcaseItem, error)
 	CountByCoach(context.Context, string) (int, error)
 	Delete(context.Context, string) error
 	AddAthlete(context.Context, *domain.GymAthlete) error

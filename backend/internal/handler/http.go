@@ -58,6 +58,7 @@ func New(u *service.UserService, c *service.GymService, f *service.FinanceServic
 		r.With(rateLimit(10, time.Minute)).Post("/auth/admin/login", a.adminLogin)
 		r.With(rateLimit(10, time.Minute)).Post("/auth/member/login", a.memberLogin)
 		r.With(rateLimit(10, time.Minute)).Post("/auth/login", a.login)
+		r.Get("/gyms/showcase", a.gymShowcase)
 		r.With(rateLimit(5, time.Minute)).Post("/auth/register", a.register)
 		r.Post("/auth/login/start", a.startLogin)
 		r.Post("/auth/login/complete", a.completeLogin)
@@ -444,6 +445,11 @@ func (a *API) gymCatalog(w http.ResponseWriter, r *http.Request) {
 }
 func (a *API) gymCatalogItem(w http.ResponseWriter, r *http.Request) {
 	v, e := a.gyms.CatalogItem(r.Context(), chi.URLParam(r, "id"), current(r))
+	respond(w, e, 200, v)
+}
+func (a *API) gymShowcase(w http.ResponseWriter, r *http.Request) {
+	v, e := a.gyms.Showcase(r.Context())
+	w.Header().Set("Cache-Control", "public, max-age=60, stale-while-revalidate=300")
 	respond(w, e, 200, v)
 }
 func (a *API) registrationFee(w http.ResponseWriter, r *http.Request) {

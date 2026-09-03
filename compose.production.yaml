@@ -1,0 +1,118 @@
+name: clubmax
+
+x-logging: &default-logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${CLUBMAX_DATABASE_NAME}
+      POSTGRES_USER: ${CLUBMAX_DATABASE_USER}
+      POSTGRES_PASSWORD: ${CLUBMAX_DATABASE_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - database
+    logging: *default-logging
+
+  backend:
+    build:
+      context: ./backend
+    image: clubmax/backend:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      CLUBMAX_SERVER_IP: db
+      CLUBMAX_BIND_IP: 0.0.0.0
+      CLUBMAX_PUBLIC_HOST: ${CLUBMAX_PUBLIC_HOST}
+      CLUBMAX_FRONTEND_ORIGIN: ${CLUBMAX_FRONTEND_ORIGIN}
+      CLUBMAX_FRONTEND_PORT: 3001
+      CLUBMAX_BACKEND_PORT: 8081
+      CLUBMAX_DATABASE_PORT: 5432
+      CLUBMAX_DATABASE_NAME: ${CLUBMAX_DATABASE_NAME}
+      CLUBMAX_DATABASE_USER: ${CLUBMAX_DATABASE_USER}
+      CLUBMAX_DATABASE_PASSWORD: ${CLUBMAX_DATABASE_PASSWORD}
+      CLUBMAX_OTP_PEPPER: ${CLUBMAX_OTP_PEPPER}
+      CLUBMAX_JWT_SECRET: ${CLUBMAX_JWT_SECRET}
+      CLUBMAX_ADMIN_NAME: ${CLUBMAX_ADMIN_NAME}
+      CLUBMAX_ADMIN_USERNAME: ${CLUBMAX_ADMIN_USERNAME}
+      CLUBMAX_ADMIN_PASSWORD: ${CLUBMAX_ADMIN_PASSWORD}
+      CLUBMAX_UPLOAD_DIR: /data/uploads
+      CLUBMAX_BACKUP_DIR: /data/backups
+      CLUBMAX_BACKUP_HOURS: 6,14,23
+      CLUBMAX_BACKUP_RETENTION: 42
+      CLUBMAX_DATABASE_CONTAINER: ""
+    ports:
+      - "${CLUBMAX_BIND_IP:-0.0.0.0}:${CLUBMAX_BACKEND_PORT:-8081}:8081"
+    volumes:
+      - app_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - app
+      - database
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop:
+      - ALL
+    logging: *default-logging
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${CLUBMAX_PUBLIC_API_URL}
+    image: clubmax/frontend:latest
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: 3001
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: 1
+    ports:
+      - "${CLUBMAX_BIND_IP:-0.0.0.0}:${CLUBMAX_FRONTEND_PORT:-3001}:3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/fa').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - app
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+      - /app/.next/cache:size=64m,uid=10001,gid=10001
+    cap_drop:
+      - ALL
+    logging: *default-logging
+
+volumes:
+  postgres_data:
+  app_data:
+
+networks:
+  app:
+  database:
+    internal: true

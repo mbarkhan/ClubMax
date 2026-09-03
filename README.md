@@ -41,3 +41,33 @@ ClubMax/
 در همان صفحه امکان بازیابی آرشیو وجود دارد. سرور ساختار آرشیو، نسخه فرمت، نام دیتابیس، تعداد فایل‌ها و SHA-256 خروجی دیتابیس را پیش از اجرا کنترل می‌کند. بازیابی دیتابیس در یک تراکنش انجام می‌شود. اگر آرشیو شامل فایل‌ها باشد پوشه آپلودها پس از موفقیت دیتابیس به‌صورت یکجا جایگزین می‌شود؛ در آرشیو فقط‌دیتابیس، فایل‌های فعلی دست‌نخورده باقی می‌مانند. آرشیوهای نسخه قبلی نیز به‌عنوان پشتیبان کامل شناخته می‌شوند.
 
 برای تهیه خروجی، نسخه `pg_dump` نصب‌شده روی میزبان باید با نسخه سرور PostgreSQL سازگار باشد. در محیط توسعه، اگر خروجی مستقیم ممکن نباشد، بک‌اند از کانتینر مشخص‌شده در `CLUBMAX_DATABASE_CONTAINER` استفاده می‌کند؛ در نصب بدون Docker این مقدار می‌تواند خالی باشد.
+
+## اجرای Production با Docker
+
+فایل `compose.production.yaml` سه سرویس مستقل و مینیمال می‌سازد: PostgreSQL 17 Alpine، بک‌اند Go و فرانت‌اند standalone نرم‌افزار Next.js. دیتابیس روی پورت عمومی منتشر نمی‌شود و فقط از شبکه داخلی Compose قابل دسترسی است. دیتابیس در volume `postgres_data` و فایل‌ها و نسخه‌های پشتیبان در volume `app_data` ماندگار هستند. log هر کانتینر نیز با گردش خودکار به سه فایل ۱۰ مگابایتی محدود شده است تا فضای دیسک بدون کنترل مصرف نشود.
+
+1. فایل تنظیمات را بسازید و دسترسی آن را محدود کنید:
+
+   ```bash
+   cp clubmax.production.env.example clubmax.production.env
+   chmod 600 clubmax.production.env
+   ```
+
+2. تمام مقادیر `REPLACE_...`، آدرس سرور و URLهای عمومی را در آن تغییر دهید.
+3. imageها را بسازید و سرویس‌ها را اجرا کنید:
+
+   ```bash
+   docker compose --env-file clubmax.production.env -f compose.production.yaml build --pull
+   docker compose --env-file clubmax.production.env -f compose.production.yaml up -d --wait
+   ```
+
+   همین فرمان‌ها با `make docker-build` و `make docker-up` نیز در دسترس‌اند.
+
+4. وضعیت و logها را بررسی کنید:
+
+   ```bash
+   docker compose --env-file clubmax.production.env -f compose.production.yaml ps
+   make docker-logs
+   ```
+
+برای توقف بدون حذف داده‌ها از `make docker-down` استفاده کنید. از اجرای `docker compose down --volumes` روی سرور اصلی خودداری کنید، زیرا volumeهای دائمی دیتابیس و فایل‌ها را حذف می‌کند. این Compose در مرحله فعلی پورت‌های 3001 و 8081 را منتشر می‌کند؛ HTTPS و اتصال دامنه باید در مرحله بعد با reverse proxy روی پورت‌های 80 و 443 اضافه شود.

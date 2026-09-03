@@ -13,9 +13,8 @@ export const metadata: Metadata = {
   title: "ClubMax",
   description: "سامانه مدیریت باشگاه ورزشی",
   icons: {
-    icon: "/icon.png",
-    shortcut: "/icon.png",
-    apple: "/icon.png",
+    icon: [{url: "/images/clubmax-logo.svg", type: "image/svg+xml"}],
+    shortcut: "/images/clubmax-logo.svg",
   },
 };
 

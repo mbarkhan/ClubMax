@@ -213,6 +213,39 @@ func (s *Store) GetCatalogItem(c context.Context, gymID, athleteID string, year,
 	v.MonthlyPaymentDue = v.UnpaidMonths > 0
 	return v, dbError(e)
 }
+
+func (s *Store) ListShowcase(c context.Context) ([]domain.GymShowcaseItem, error) {
+	rows, err := s.DB.Query(c, `
+		SELECT g.id, g.name, concat_ws(' ', u.first_name, u.last_name),
+		       g.sport, g.sport_style, g.start_time::text, g.end_time::text,
+		       image.storage_key
+		FROM gyms g
+		JOIN users u ON u.id = g.coach_id
+		LEFT JOIN LATERAL (
+			SELECT gi.storage_key
+			FROM gym_images gi
+			WHERE gi.gym_id = g.id
+			ORDER BY gi.created_at, gi.id
+			LIMIT 1
+		) image ON true
+		WHERE u.active = true
+		ORDER BY g.created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := []domain.GymShowcaseItem{}
+	for rows.Next() {
+		var item domain.GymShowcaseItem
+		if err = rows.Scan(&item.ID, &item.Name, &item.CoachName, &item.Sport, &item.SportStyle, &item.StartTime, &item.EndTime, &item.ImageStorageKey); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func (s *Store) CountByCoach(c context.Context, id string) (int, error) {
 	var n int
 	e := s.DB.QueryRow(c, `SELECT count(*) FROM gyms WHERE coach_id=$1`, id).Scan(&n)

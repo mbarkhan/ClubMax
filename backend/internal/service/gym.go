@@ -2,10 +2,10 @@ package service
 
 import (
 	"context"
-	"github.com/google/uuid"
 	"github.com/clubmax/clubmax/internal/domain"
 	"github.com/clubmax/clubmax/internal/reference"
 	"github.com/clubmax/clubmax/internal/repository"
+	"github.com/google/uuid"
 	"strings"
 	"time"
 )
@@ -95,6 +95,9 @@ func (s *GymService) CatalogItem(ctx context.Context, id string, actor *domain.U
 	}
 	year, month := persianYearMonth(s.now())
 	return s.gyms.GetCatalogItem(ctx, id, actor.ID, year, month)
+}
+func (s *GymService) Showcase(ctx context.Context) ([]domain.GymShowcaseItem, error) {
+	return s.gyms.ListShowcase(ctx)
 }
 func (s *GymService) Get(ctx context.Context, id string, actor *domain.User) (*domain.Gym, error) {
 	gym, err := s.gyms.GetByID(ctx, id)

@@ -1,6 +1,50 @@
 import Link from "next/link";
 import SiteLogo from "../components/SiteLogo";
+import GymShowcase from "../components/GymShowcase";
 import "../home.css";
+
+const overviewItems = [
+  {
+    title: " مدیریت یکپارچه و امن ",
+    description: "باشگاه‌، مربی، ورزشکار",
+    tone: "green",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3" y="3" width="7" height="7" rx="2" />
+        <rect x="14" y="3" width="7" height="7" rx="2" />
+        <rect x="3" y="14" width="7" height="7" rx="2" />
+        <rect x="14" y="14" width="7" height="7" rx="2" />
+      </svg>
+    ),
+  },
+  {
+    title: "تحت وب",
+    description: "دسترسی از همه جا",
+    tone: "blue",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18" />
+        <path d="M12 3c2.4 2.5 3.7 5.5 3.7 9S14.4 18.5 12 21" />
+        <path d="M12 3c-2.4 2.5-3.7 5.5-3.7 9S9.6 18.5 12 21" />
+      </svg>
+    ),
+  },
+  {
+    title: "رشد مستمر",
+    description: "تصمیم بهتر با گزارش‌های کاربردی",
+    tone: "purple",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 19V5" />
+        <path d="M4 19h16" />
+        <path d="m7 15 4-4 3 2 5-6" />
+        <path d="M15.5 7H19v3.5" />
+      </svg>
+    ),
+  },
+];
+
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   return (
@@ -10,7 +54,6 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
         <nav>
           <a href="#features">امکانات</a>
           <a href="#gyms">باشگاه‌ها</a>
-          <a href="#news">اخبار</a>
         </nav>
         <div>
           <Link className="login-link" href={`/${locale}/login`}>
@@ -25,7 +68,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
         <div>
           <span>مدیریت حرفه‌ای باشگاه ورزشی</span>
           <h1>
-            باشگاهت را
+            باشگاهت رو
             <br />
             <em>هوشمندتر</em> مدیریت کن.
           </h1>
@@ -34,22 +77,17 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
             <Link href={`/${locale}/signup`}>شروع ثبت‌نام ←</Link>
             <Link href={`/${locale}/login`}>حساب کاربری دارم</Link>
           </div>
-          <small>● نسخه توسعه در حال تکمیل</small>
         </div>
         <aside>
           <div className="hero-card">
-            <span>نمای کلی امروز</span>
-            <strong>همه چیز یک‌جا</strong>
-            {[
-              ["۳۶", "باشگاه فعال", "مدیریت متمرکز"],
-              ["✓", "اطلاعات امن", "دسترسی نقش‌محور"],
-              ["↑", "رشد مستمر", "گزارش‌های کاربردی"],
-            ].map((x) => (
-              <div key={x[1]}>
-                <i>{x[0]}</i>
+            <span>در یک نگاه</span>
+            <strong>کلاب ماکس</strong>
+            {overviewItems.map((item) => (
+              <div className="hero-card-item" key={item.title}>
+                <span className={`hero-card-icon ${item.tone}`}>{item.icon}</span>
                 <p>
-                  {x[1]}
-                  <small>{x[2]}</small>
+                  {item.title}
+                  <small>{item.description}</small>
                 </p>
               </div>
             ))}
@@ -57,13 +95,17 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
         </aside>
       </section>
       <section id="features" className="home-section">
-        <span>برای هر نقش، یک تجربه اختصاصی</span>
         <h2>ساخته‌شده برای دنیای واقعی باشگاه</h2>
         <div className="feature-grid">
           {[
-            ["م", "برای مربیان", "ثبت باشگاه، مدیریت ورزشکاران و پیگیری امور روزمره."],
-            ["و", "برای ورزشکاران", "عضویت در باشگاه‌ها و دسترسی آسان به اطلاعات شخصی."],
-            ["ا", "امن و یکپارچه", "اطلاعات متمرکز، مجوزهای دقیق و تجربه‌ای مناسب موبایل."],
+            [
+              "مربی",
+              "ثبت باشگاه، مدیریت ورزشکاران، مدیریت شهریه ها، سیستم حضور و غیاب(به زودی) و...",
+            ],
+            [
+              "ورزشکار",
+              "عضویت در باشگاه‌ها و دسترسی آسان به تمامی باشگاه های ورزشی ثبت شده، مقایسه آسان،پرداخت شهریه بدون کارمزد و...",
+            ],
           ].map((x) => (
             <article key={x[1]}>
               <i>{x[0]}</i>
@@ -73,29 +115,8 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           ))}
         </div>
       </section>
-      <section id="gyms" className="placeholder-section">
-        <div>
-          <span>باشگاه‌های منتخب</span>
-          <h2>باشگاه مناسب خودت را پیدا کن</h2>
-          <p>فهرست و جست‌وجوی باشگاه‌ها در مرحله بعد اینجا قرار می‌گیرد.</p>
-        </div>
-        <b>به‌زودی</b>
-      </section>
-      <section id="news" className="home-section news">
-        <span>اخبار و تازه‌ها</span>
-        <h2>از ClubMax چه خبر؟</h2>
-        <div className="news-grid">
-          {["راهنمای شروع برای مربیان", "امنیت اطلاعات ورزشکاران", "نسخه بعدی ClubMax"].map(
-            (x, i) => (
-              <article key={x}>
-                <small>خبر {i + 1}</small>
-                <h3>{x}</h3>
-                <p>این بخش در ادامه پروژه با محتوای واقعی تکمیل خواهد شد.</p>
-              </article>
-            )
-          )}
-        </div>
-      </section>
+      <GymShowcase locale={locale} />
+
       <footer>
         <SiteLogo href={`/${locale}`} priority />
         <p>سامانه مدیریت باشگاه، مربی و ورزشکار</p>

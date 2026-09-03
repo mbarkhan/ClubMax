@@ -9,7 +9,7 @@
   "dependencies": {
     "@fontsource/vazirmatn": "^5.2.6",
     "jalaali-js": "^1.2.8",
-    "next": "15.5.0",
+    "next": "15.5.24",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },
@@ -19,5 +19,9 @@
     "@types/react-dom": "19.1.2",
     "prettier": "3.9.6",
     "typescript": "5.8.3"
+  },
+  "overrides": {
+    "postcss": "8.5.26",
+    "sharp": "0.35.4"
   }
 }

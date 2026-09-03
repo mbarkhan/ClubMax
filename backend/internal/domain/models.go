@@ -150,6 +150,18 @@ type GymCatalogItem struct {
 	MonthlyPaymentDue bool   `json:"monthly_payment_due"`
 }
 
+// GymShowcaseItem contains only the public fields used by the home-page banner.
+type GymShowcaseItem struct {
+	ID              string  `json:"id"`
+	Name            string  `json:"name"`
+	CoachName       string  `json:"coach_name"`
+	Sport           string  `json:"sport"`
+	SportStyle      string  `json:"sport_style"`
+	StartTime       string  `json:"start_time"`
+	EndTime         string  `json:"end_time"`
+	ImageStorageKey *string `json:"image_storage_key,omitempty"`
+}
+
 type RegistrationFeePolicy struct {
 	FeeAmount int64     `json:"fee_amount"`
 	UpdatedAt time.Time `json:"updated_at"`

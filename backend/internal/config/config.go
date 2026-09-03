@@ -15,6 +15,7 @@ type Config struct {
 	ServerIP          string
 	BindIP            string
 	PublicHost        string
+	FrontendURL       string
 	FrontendPort      string
 	BackendPort       string
 	DatabasePort      string
@@ -37,6 +38,7 @@ func Load() (Config, error) {
 	c := Config{
 		ServerIP: required("CLUBMAX_SERVER_IP"), FrontendPort: required("CLUBMAX_FRONTEND_PORT"),
 		BindIP: required("CLUBMAX_BIND_IP"), PublicHost: required("CLUBMAX_PUBLIC_HOST"),
+		FrontendURL: required("CLUBMAX_FRONTEND_ORIGIN"),
 		BackendPort: required("CLUBMAX_BACKEND_PORT"), DatabasePort: required("CLUBMAX_DATABASE_PORT"),
 		DatabaseName: required("CLUBMAX_DATABASE_NAME"), DatabaseUser: required("CLUBMAX_DATABASE_USER"),
 		DatabasePassword: required("CLUBMAX_DATABASE_PASSWORD"), OTPPepper: required("CLUBMAX_OTP_PEPPER"),
@@ -80,7 +82,12 @@ func parseHours(value string) ([]int, error) {
 }
 
 func (c Config) BackendAddress() string { return c.BindIP + ":" + c.BackendPort }
-func (c Config) FrontendOrigin() string { return "http://" + c.PublicHost + ":" + c.FrontendPort }
+func (c Config) FrontendOrigin() string {
+	if c.FrontendURL != "" {
+		return strings.TrimRight(c.FrontendURL, "/")
+	}
+	return "http://" + c.PublicHost + ":" + c.FrontendPort
+}
 func (c Config) DatabaseURL() string {
 	connection := url.URL{
 		Scheme: "postgres",
@@ -93,6 +100,9 @@ func (c Config) DatabaseURL() string {
 }
 
 func loadFile() error {
+	if os.Getenv("CLUBMAX_CONFIG_FILE") == "" && os.Getenv("CLUBMAX_SERVER_IP") != "" {
+		return nil
+	}
 	paths := []string{"../clubmax.env", "clubmax.env"}
 	if explicit := os.Getenv("CLUBMAX_CONFIG_FILE"); explicit != "" {
 		paths = append([]string{explicit}, paths...)
