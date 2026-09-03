@@ -9,15 +9,15 @@ ClubMax is a gym-management platform built for coaches and athletes.
 ClubMax/
 ├── backend/       API، مدل‌ها، منطق دامنه و repositoryهای PostgreSQL
 ├── frontend/      رابط کاربری Next.js، فارسی و انگلیسی
-├── clubmax.env.example  الگوی تنظیمات مرکزی IP، پورت‌ها و کلیدها
+├── clubmax.env  تنظیمات مرکزی محلی و سرور (خارج از Git)
 ├── compose.yaml   پایگاه‌داده محلی
 └── Makefile       فرمان‌های متداول توسعه
 ```
 
 ## اجرای محلی
 
-1. پایگاه‌داده را با `docker compose up -d db` اجرا کنید.
-2. در نصب جدید، `clubmax.env.example` را با نام `clubmax.env` کپی و IP، پورت‌ها و رمزها را در همان فایل مرکزی تنظیم کنید. اسکیمای دیتابیس هنگام شروع بک‌اند از مدل‌ها ساخته می‌شود.
+1. پایگاه‌داده را با `make db-up` اجرا کنید؛ این فرمان تنظیمات را از `clubmax.env` می‌خواند.
+2. در نصب جدید فایل `clubmax.env` را بسازید و IP، پورت‌ها و رمزها را در همان فایل مرکزی تنظیم کنید. این فایل حاوی Secret است و در Git ثبت نمی‌شود. اسکیمای دیتابیس هنگام شروع بک‌اند از مدل‌ها ساخته می‌شود.
 3. بک‌اند را با `cd backend && go run main.go` اجرا کنید.
 4. فرانت‌اند را با `cd frontend && npm install && npm run dev` اجرا کنید.
 
@@ -46,19 +46,19 @@ ClubMax/
 
 فایل `compose.production.yaml` سه سرویس مستقل و مینیمال می‌سازد: PostgreSQL 17 Alpine، بک‌اند Go و فرانت‌اند standalone نرم‌افزار Next.js. دیتابیس روی پورت عمومی منتشر نمی‌شود و فقط از شبکه داخلی Compose قابل دسترسی است. دیتابیس در volume `postgres_data` و فایل‌ها و نسخه‌های پشتیبان در volume `app_data` ماندگار هستند. log هر کانتینر نیز با گردش خودکار به سه فایل ۱۰ مگابایتی محدود شده است تا فضای دیسک بدون کنترل مصرف نشود.
 
-1. فایل تنظیمات را بسازید و دسترسی آن را محدود کنید:
+1. فایل مرکزی `clubmax.env` را روی سرور بسازید و دسترسی آن را محدود کنید:
 
    ```bash
-   cp clubmax.production.env.example clubmax.production.env
-   chmod 600 clubmax.production.env
+   nano clubmax.env
+   chmod 600 clubmax.env
    ```
 
-2. تمام مقادیر `REPLACE_...`، آدرس سرور و URLهای عمومی را در آن تغییر دهید.
+2. آدرس سرور، پورت‌ها و Secretهای Production را در آن ثبت کنید. Compose آدرس‌های عمومی را از `CLUBMAX_PUBLIC_HOST` و پورت‌ها می‌سازد؛ در صورت استفاده از دامنه یا HTTPS می‌توان `CLUBMAX_FRONTEND_ORIGIN` و `CLUBMAX_PUBLIC_API_URL` را نیز صریحاً تعیین کرد.
 3. imageها را بسازید و سرویس‌ها را اجرا کنید:
 
    ```bash
-   docker compose --env-file clubmax.production.env -f compose.production.yaml build --pull
-   docker compose --env-file clubmax.production.env -f compose.production.yaml up -d --wait
+   docker compose --env-file clubmax.env -f compose.production.yaml build --pull
+   docker compose --env-file clubmax.env -f compose.production.yaml up -d --wait
    ```
 
    همین فرمان‌ها با `make docker-build` و `make docker-up` نیز در دسترس‌اند.
@@ -66,7 +66,7 @@ ClubMax/
 4. وضعیت و logها را بررسی کنید:
 
    ```bash
-   docker compose --env-file clubmax.production.env -f compose.production.yaml ps
+   docker compose --env-file clubmax.env -f compose.production.yaml ps
    make docker-logs
    ```
 

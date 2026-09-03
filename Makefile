@@ -19,13 +19,13 @@ db-down:
 	docker compose --env-file clubmax.env down
 
 docker-build:
-	docker compose --env-file clubmax.production.env -f compose.production.yaml build --pull
+	docker compose --env-file clubmax.env -f compose.production.yaml build --pull
 
 docker-up:
-	docker compose --env-file clubmax.production.env -f compose.production.yaml up -d --wait
+	docker compose --env-file clubmax.env -f compose.production.yaml up -d --wait
 
 docker-down:
-	docker compose --env-file clubmax.production.env -f compose.production.yaml down
+	docker compose --env-file clubmax.env -f compose.production.yaml down
 
 docker-logs:
-	docker compose --env-file clubmax.production.env -f compose.production.yaml logs -f --tail=100
+	docker compose --env-file clubmax.env -f compose.production.yaml logs -f --tail=100

@@ -38,7 +38,7 @@ services:
       CLUBMAX_SERVER_IP: db
       CLUBMAX_BIND_IP: 0.0.0.0
       CLUBMAX_PUBLIC_HOST: ${CLUBMAX_PUBLIC_HOST}
-      CLUBMAX_FRONTEND_ORIGIN: ${CLUBMAX_FRONTEND_ORIGIN}
+      CLUBMAX_FRONTEND_ORIGIN: ${CLUBMAX_FRONTEND_ORIGIN:-http://${CLUBMAX_PUBLIC_HOST}:${CLUBMAX_FRONTEND_PORT:-3001}}
       CLUBMAX_FRONTEND_PORT: 3001
       CLUBMAX_BACKEND_PORT: 8081
       CLUBMAX_DATABASE_PORT: 5432
@@ -79,7 +79,7 @@ services:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_URL: ${CLUBMAX_PUBLIC_API_URL}
+        NEXT_PUBLIC_API_URL: ${CLUBMAX_PUBLIC_API_URL:-http://${CLUBMAX_PUBLIC_HOST}:${CLUBMAX_BACKEND_PORT:-8081}}
     image: clubmax/frontend:latest
     restart: unless-stopped
     depends_on:

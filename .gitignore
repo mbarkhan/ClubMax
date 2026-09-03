@@ -8,4 +8,3 @@ frontend/.next/
 frontend/.next-dev/
 .local/
 clubmax.env
-clubmax.production.env
