@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import SiteLogo from "./SiteLogo";
 import "../dashboard-sidebar.css";
 
@@ -13,13 +14,31 @@ type SidebarUser = {
   face_image_id?: string;
 };
 type ItemKey =
-  "dashboard" | "users" | "gyms" | "finance" | "payments" | "withdrawals" | "backups" | "wallet" | "profile";
+  | "dashboard"
+  | "users"
+  | "gyms"
+  | "finance"
+  | "payments"
+  | "withdrawals"
+  | "backups"
+  | "wallet"
+  | "tickets"
+  | "profile";
 const roleNames = { admin: "مدیر سایت", coach: "مربی", athlete: "ورزشکار" };
 
 function NavIcon({
   name,
 }: {
-  name: "dashboard" | "users" | "gyms" | "wallet" | "explore" | "payments" | "messages" | "profile" | "backup";
+  name:
+    | "dashboard"
+    | "users"
+    | "gyms"
+    | "wallet"
+    | "explore"
+    | "payments"
+    | "messages"
+    | "profile"
+    | "backup";
 }) {
   const paths = {
     dashboard: (
@@ -97,8 +116,35 @@ export default function DashboardSidebar({
   active: ItemKey;
 }) {
   const router = useRouter(),
+    [unreadTickets, setUnreadTickets] = useState(0),
     initials = user.first_name[0] + (user.last_name?.[0] || ""),
     profileImage = user.face_image_id ? `${API}/media/${user.face_image_id}` : "";
+  const refreshUnreadTickets = useCallback(async () => {
+    const token = localStorage.getItem("clubmax_access_token");
+    if (!token) return;
+    try {
+      const response = await fetch(`${API}/v1/tickets/unread-count`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUnreadTickets(Number(data.count) || 0);
+      }
+    } catch {
+      // A transient badge refresh failure should not affect dashboard navigation.
+    }
+  }, []);
+  useEffect(() => {
+    refreshUnreadTickets();
+    const interval = window.setInterval(refreshUnreadTickets, 30000);
+    window.addEventListener("focus", refreshUnreadTickets);
+    window.addEventListener("clubmax:tickets-read", refreshUnreadTickets);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshUnreadTickets);
+      window.removeEventListener("clubmax:tickets-read", refreshUnreadTickets);
+    };
+  }, [refreshUnreadTickets]);
   const item = (
     key: ItemKey,
     href: string,
@@ -108,6 +154,11 @@ export default function DashboardSidebar({
     <Link className={active === key ? "active" : ""} href={href}>
       <NavIcon name={icon} />
       <span>{label}</span>
+      {key === "tickets" && unreadTickets > 0 && (
+        <b className="nav-unread-badge" aria-label={`${unreadTickets} تیکت خوانده‌نشده`}>
+          {unreadTickets > 99 ? "+۹۹" : unreadTickets.toLocaleString("fa-IR")}
+        </b>
+      )}
     </Link>
   );
   const plain = (href: string, label: string, icon: Parameters<typeof NavIcon>[0]["name"]) => (
@@ -137,7 +188,10 @@ export default function DashboardSidebar({
             >
               مالی
             </Link>
-            <Link className={active === "backups" ? "active" : ""} href={`/${locale}/admin/backups`}>
+            <Link
+              className={active === "backups" ? "active" : ""}
+              href={`/${locale}/admin/backups`}
+            >
               پشتیبان‌گیری
             </Link>
           </>
@@ -159,6 +213,10 @@ export default function DashboardSidebar({
         )}
         <Link className={active === "profile" ? "active" : ""} href={`/${locale}/profile`}>
           پروفایل
+        </Link>
+        <Link className={active === "tickets" ? "active" : ""} href={`/${locale}/tickets`}>
+          پشتیبانی
+          {unreadTickets > 0 && <b className="mobile-unread-dot" aria-label="تیکت خوانده‌نشده" />}
         </Link>
       </div>
       <div className="identity">
@@ -188,7 +246,12 @@ export default function DashboardSidebar({
         {user.role === "athlete" && plain(`/${locale}/explore-gyms`, "باشگاه‌ها", "explore")}
         {user.role === "athlete" &&
           item("payments", `/${locale}/payments`, "پرداخت‌های من", "payments")}
-        {plain(`/${locale}/dashboard`, "پیام‌ها", "messages")}
+        {item(
+          "tickets",
+          `/${locale}/tickets`,
+          user.role === "admin" ? "مدیریت تیکت‌ها" : "پشتیبانی و تیکت‌ها",
+          "messages"
+        )}
         {item("profile", `/${locale}/profile`, "پروفایل من", "profile")}
       </nav>
       <button

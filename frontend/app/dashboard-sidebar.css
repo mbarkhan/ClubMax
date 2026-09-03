@@ -34,6 +34,28 @@
 .shell aside nav a span {
   flex: 1;
 }
+.shell aside .nav-unread-badge {
+  display: grid;
+  place-items: center;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 5px;
+  border-radius: 12px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  box-shadow: 0 0 0 3px #ef444426;
+}
+.mobile-unread-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px #ef444433;
+}
 .shell aside .nav-icon {
   box-sizing: border-box;
   width: 27px;

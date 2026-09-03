@@ -242,6 +242,53 @@ type MessageRecipient struct {
 	ReadAt            *time.Time
 }
 
+type TicketCategory string
+type TicketStatus string
+
+const (
+	TicketCategoryPayment   TicketCategory = "payment"
+	TicketCategoryAccount   TicketCategory = "account"
+	TicketCategoryGym       TicketCategory = "gym"
+	TicketCategoryTechnical TicketCategory = "technical"
+	TicketCategoryOther     TicketCategory = "other"
+	TicketWaitingAdmin      TicketStatus   = "waiting_admin"
+	TicketWaitingMember     TicketStatus   = "waiting_member"
+	TicketClosed            TicketStatus   = "closed"
+)
+
+type SupportTicket struct {
+	ID              string         `json:"id"`
+	Number          int64          `json:"number"`
+	OwnerID         string         `json:"owner_id"`
+	OwnerName       string         `json:"owner_name,omitempty"`
+	OwnerRole       Role           `json:"owner_role,omitempty"`
+	OwnerPhone      *string        `json:"owner_phone,omitempty"`
+	Category        TicketCategory `json:"category"`
+	Subject         string         `json:"subject"`
+	Status          TicketStatus   `json:"status"`
+	AssignedAdminID *string        `json:"assigned_admin_id,omitempty"`
+	Unread          bool           `json:"unread"`
+	LastMessageAt   time.Time      `json:"last_message_at"`
+	ClosedAt        *time.Time     `json:"closed_at,omitempty"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
+}
+
+type SupportTicketMessage struct {
+	ID         string    `json:"id"`
+	TicketID   string    `json:"ticket_id"`
+	SenderID   string    `json:"sender_id"`
+	SenderName string    `json:"sender_name"`
+	SenderRole Role      `json:"sender_role"`
+	Body       string    `json:"body"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+type SupportTicketDetail struct {
+	Ticket   SupportTicket          `json:"ticket"`
+	Messages []SupportTicketMessage `json:"messages"`
+}
+
 type LedgerEntryType string
 
 const (

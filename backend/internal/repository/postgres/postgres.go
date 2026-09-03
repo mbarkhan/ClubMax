@@ -26,9 +26,9 @@ func New(ctx context.Context, url string) (*Store, error) {
 		p.Close()
 		return nil, e
 	}
-	if _, e = p.Exec(ctx, domain.Schema); e != nil {
+	if e = runMigrations(ctx, p); e != nil {
 		p.Close()
-		return nil, fmt.Errorf("initialize database schema: %w", e)
+		return nil, fmt.Errorf("initialize database: %w", e)
 	}
 	return &Store{p}, nil
 }
@@ -866,6 +866,138 @@ func (s *Store) ShareGym(c context.Context, a, b string) (bool, error) {
 	var ok bool
 	e := s.DB.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM (SELECT id FROM gyms WHERE coach_id=$1 UNION SELECT gym_id FROM gym_athletes WHERE athlete_id=$1) x JOIN (SELECT id FROM gyms WHERE coach_id=$2 UNION SELECT gym_id FROM gym_athletes WHERE athlete_id=$2) y ON y.id=x.id)`, a, b).Scan(&ok)
 	return ok, e
+}
+
+func (s *Store) CreateTicket(c context.Context, t *domain.SupportTicket, first *domain.SupportTicketMessage) error {
+	tx, err := s.DB.Begin(c)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(c)
+	err = tx.QueryRow(c, `INSERT INTO support_tickets(id,owner_id,category,subject,status,last_message_at,member_last_read_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$6,$6,$6) RETURNING number`, t.ID, t.OwnerID, t.Category, t.Subject, t.Status, t.CreatedAt).Scan(&t.Number)
+	if err != nil {
+		return dbError(err)
+	}
+	_, err = tx.Exec(c, `INSERT INTO support_ticket_messages(id,ticket_id,sender_id,body,created_at) VALUES($1,$2,$3,$4,$5)`, first.ID, first.TicketID, first.SenderID, first.Body, first.CreatedAt)
+	if err != nil {
+		return dbError(err)
+	}
+	return tx.Commit(c)
+}
+
+func (s *Store) ListTickets(c context.Context, f repository.TicketFilter) ([]domain.SupportTicket, error) {
+	if f.Limit <= 0 || f.Limit > 100 {
+		f.Limit = 30
+	}
+	rows, err := s.DB.Query(c, `SELECT t.id,t.number,t.owner_id,concat(u.first_name,' ',u.last_name),u.role,u.phone,t.category,t.subject,t.status,t.assigned_admin_id,
+	CASE WHEN $2='admin' THEN t.admin_last_read_at IS NULL OR t.last_message_at>t.admin_last_read_at ELSE t.last_message_at>t.member_last_read_at END,
+	t.last_message_at,t.closed_at,t.created_at,t.updated_at
+	FROM support_tickets t JOIN users u ON u.id=t.owner_id
+	WHERE ($2='admin' OR t.owner_id=$1) AND ($3='' OR t.status::text=$3) AND ($4='' OR t.category::text=$4)
+	AND ($5='' OR t.subject ILIKE '%'||$5||'%' OR t.number::text=$5 OR concat(u.first_name,' ',u.last_name) ILIKE '%'||$5||'%')
+	ORDER BY t.last_message_at DESC LIMIT $6 OFFSET $7`, f.ActorID, f.ActorRole, optionalTicketStatus(f.Status), optionalTicketCategory(f.Category), f.Search, f.Limit, f.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.SupportTicket{}
+	for rows.Next() {
+		var t domain.SupportTicket
+		if err = rows.Scan(&t.ID, &t.Number, &t.OwnerID, &t.OwnerName, &t.OwnerRole, &t.OwnerPhone, &t.Category, &t.Subject, &t.Status, &t.AssignedAdminID, &t.Unread, &t.LastMessageAt, &t.ClosedAt, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+func optionalTicketStatus(v *domain.TicketStatus) string {
+	if v == nil {
+		return ""
+	}
+	return string(*v)
+}
+func optionalTicketCategory(v *domain.TicketCategory) string {
+	if v == nil {
+		return ""
+	}
+	return string(*v)
+}
+
+func (s *Store) GetTicket(c context.Context, id string) (*domain.SupportTicket, error) {
+	var t domain.SupportTicket
+	err := s.DB.QueryRow(c, `SELECT t.id,t.number,t.owner_id,concat(u.first_name,' ',u.last_name),u.role,u.phone,t.category,t.subject,t.status,t.assigned_admin_id,false,t.last_message_at,t.closed_at,t.created_at,t.updated_at FROM support_tickets t JOIN users u ON u.id=t.owner_id WHERE t.id=$1`, id).Scan(&t.ID, &t.Number, &t.OwnerID, &t.OwnerName, &t.OwnerRole, &t.OwnerPhone, &t.Category, &t.Subject, &t.Status, &t.AssignedAdminID, &t.Unread, &t.LastMessageAt, &t.ClosedAt, &t.CreatedAt, &t.UpdatedAt)
+	if err != nil {
+		return nil, dbError(err)
+	}
+	return &t, nil
+}
+
+func (s *Store) ListTicketMessages(c context.Context, ticket string) ([]domain.SupportTicketMessage, error) {
+	rows, err := s.DB.Query(c, `SELECT m.id,m.ticket_id,m.sender_id,concat(u.first_name,' ',u.last_name),u.role,m.body,m.created_at FROM support_ticket_messages m JOIN users u ON u.id=m.sender_id WHERE m.ticket_id=$1 ORDER BY m.created_at,m.id`, ticket)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.SupportTicketMessage{}
+	for rows.Next() {
+		var m domain.SupportTicketMessage
+		if err = rows.Scan(&m.ID, &m.TicketID, &m.SenderID, &m.SenderName, &m.SenderRole, &m.Body, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) AddTicketReply(c context.Context, m *domain.SupportTicketMessage, status domain.TicketStatus, assigned *string) error {
+	tx, err := s.DB.Begin(c)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(c)
+	_, err = tx.Exec(c, `INSERT INTO support_ticket_messages(id,ticket_id,sender_id,body,created_at) VALUES($1,$2,$3,$4,$5)`, m.ID, m.TicketID, m.SenderID, m.Body, m.CreatedAt)
+	if err != nil {
+		return dbError(err)
+	}
+	tag, err := tx.Exec(c, `UPDATE support_tickets SET status=$2::varchar,assigned_admin_id=COALESCE($3,assigned_admin_id),last_message_at=$4,updated_at=$4,closed_at=NULL,
+	member_last_read_at=CASE WHEN $2::varchar='waiting_admin' THEN $4 ELSE member_last_read_at END,
+	admin_last_read_at=CASE WHEN $2::varchar='waiting_member' THEN $4 ELSE admin_last_read_at END WHERE id=$1`, m.TicketID, status, assigned, m.CreatedAt)
+	if err != nil {
+		return dbError(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return tx.Commit(c)
+}
+
+func (s *Store) SetTicketStatus(c context.Context, id string, status domain.TicketStatus, admin *string, closed *time.Time) error {
+	tag, err := s.DB.Exec(c, `UPDATE support_tickets SET status=$2,assigned_admin_id=COALESCE($3,assigned_admin_id),closed_at=$4,updated_at=now() WHERE id=$1`, id, status, admin, closed)
+	if err == nil && tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return dbError(err)
+}
+
+func (s *Store) MarkTicketRead(c context.Context, id string, role domain.Role) error {
+	column := "member_last_read_at"
+	if role == domain.RoleAdmin {
+		column = "admin_last_read_at"
+	}
+	tag, err := s.DB.Exec(c, `UPDATE support_tickets SET `+column+`=now() WHERE id=$1`, id)
+	if err == nil && tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return dbError(err)
+}
+
+func (s *Store) CountUnreadTickets(c context.Context, actorID string, role domain.Role) (int64, error) {
+	var count int64
+	err := s.DB.QueryRow(c, `SELECT count(*) FROM support_tickets
+		WHERE ($2='admin' AND (admin_last_read_at IS NULL OR last_message_at>admin_last_read_at))
+		   OR ($2<>'admin' AND owner_id=$1 AND last_message_at>member_last_read_at)`, actorID, role).Scan(&count)
+	return count, err
 }
 
 type MessageStore struct{ *Store }

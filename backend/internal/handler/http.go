@@ -27,14 +27,15 @@ type API struct {
 	gyms      *service.GymService
 	finance   *service.FinanceService
 	messages  *service.MessageService
+	tickets   *service.TicketService
 	admin     *service.AdminService
 	backups   *service.BackupService
 	jwtKey    []byte
 	uploadDir string
 }
 
-func New(u *service.UserService, c *service.GymService, f *service.FinanceService, m *service.MessageService, admin *service.AdminService, backups *service.BackupService, jwtSecret, frontendOrigin, uploadDir string) http.Handler {
-	a := &API{users: u, gyms: c, finance: f, messages: m, admin: admin, backups: backups, jwtKey: []byte(jwtSecret), uploadDir: uploadDir}
+func New(u *service.UserService, c *service.GymService, f *service.FinanceService, m *service.MessageService, tickets *service.TicketService, admin *service.AdminService, backups *service.BackupService, jwtSecret, frontendOrigin, uploadDir string) http.Handler {
+	a := &API{users: u, gyms: c, finance: f, messages: m, tickets: tickets, admin: admin, backups: backups, jwtKey: []byte(jwtSecret), uploadDir: uploadDir}
 	r := chi.NewRouter()
 	r.Use(recoverer, securityHeaders, locale, cors(frontendOrigin))
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) { write(w, 200, map[string]string{"status": "ok"}) })
@@ -105,6 +106,12 @@ func New(u *service.UserService, c *service.GymService, f *service.FinanceServic
 			r.Get("/messages", a.inbox)
 			r.Post("/messages", a.sendMessage)
 			r.Put("/messages/{id}/read", a.markMessageRead)
+			r.Get("/tickets", a.listTickets)
+			r.Get("/tickets/unread-count", a.unreadTicketCount)
+			r.With(requireRole(domain.RoleCoach, domain.RoleAthlete)).Post("/tickets", a.createTicket)
+			r.Get("/tickets/{id}", a.ticketDetail)
+			r.Post("/tickets/{id}/messages", a.replyTicket)
+			r.Put("/tickets/{id}/status", a.updateTicketStatus)
 			r.Get("/finance/policy", a.getPolicy)
 			r.With(requireRole(domain.RoleAdmin)).Put("/finance/policy", a.setPolicy)
 			r.With(requireRole(domain.RoleCoach)).Get("/wallet", a.wallet)
@@ -573,6 +580,62 @@ func (a *API) markMessageRead(w http.ResponseWriter, r *http.Request) {
 	e := a.messages.MarkRead(r.Context(), current(r).ID, chi.URLParam(r, "id"))
 	respond(w, e, 200, map[string]string{"message": "ok"})
 }
+func (a *API) createTicket(w http.ResponseWriter, r *http.Request) {
+	var v struct {
+		Subject  string                `json:"subject"`
+		Category domain.TicketCategory `json:"category"`
+		Body     string                `json:"body"`
+	}
+	if decode(w, r, &v) != nil {
+		return
+	}
+	t, e := a.tickets.Create(r.Context(), current(r), &domain.SupportTicket{Subject: v.Subject, Category: v.Category}, v.Body)
+	respond(w, e, http.StatusCreated, t)
+}
+func (a *API) unreadTicketCount(w http.ResponseWriter, r *http.Request) {
+	count, e := a.tickets.UnreadCount(r.Context(), current(r))
+	respond(w, e, http.StatusOK, map[string]int64{"count": count})
+}
+func (a *API) listTickets(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	var status *domain.TicketStatus
+	if raw := r.URL.Query().Get("status"); raw != "" {
+		v := domain.TicketStatus(raw)
+		status = &v
+	}
+	var category *domain.TicketCategory
+	if raw := r.URL.Query().Get("category"); raw != "" {
+		v := domain.TicketCategory(raw)
+		category = &v
+	}
+	v, e := a.tickets.List(r.Context(), current(r), repository.TicketFilter{Status: status, Category: category, Search: r.URL.Query().Get("q"), Limit: limit, Offset: offset})
+	respond(w, e, http.StatusOK, v)
+}
+func (a *API) ticketDetail(w http.ResponseWriter, r *http.Request) {
+	v, e := a.tickets.Detail(r.Context(), current(r), chi.URLParam(r, "id"))
+	respond(w, e, http.StatusOK, v)
+}
+func (a *API) replyTicket(w http.ResponseWriter, r *http.Request) {
+	var v struct {
+		Body string `json:"body"`
+	}
+	if decode(w, r, &v) != nil {
+		return
+	}
+	m, e := a.tickets.Reply(r.Context(), current(r), chi.URLParam(r, "id"), v.Body)
+	respond(w, e, http.StatusCreated, m)
+}
+func (a *API) updateTicketStatus(w http.ResponseWriter, r *http.Request) {
+	var v struct {
+		Status domain.TicketStatus `json:"status"`
+	}
+	if decode(w, r, &v) != nil {
+		return
+	}
+	e := a.tickets.SetStatus(r.Context(), current(r), chi.URLParam(r, "id"), v.Status)
+	respond(w, e, http.StatusOK, map[string]string{"message": "ok"})
+}
 func (a *API) getPolicy(w http.ResponseWriter, r *http.Request) {
 	v, e := a.finance.Policy(r.Context())
 	respond(w, e, 200, v)
@@ -743,6 +806,9 @@ func problem(w http.ResponseWriter, e error) {
 		status, code = 409, "backup_in_progress"
 	case errors.Is(e, domain.ErrInvalidBackup):
 		status, code = 400, "invalid_backup"
+	}
+	if status == http.StatusInternalServerError {
+		log.Printf("unhandled API error: %v", e)
 	}
 	payload := map[string]string{"error": code, "message": message(w, code)}
 	var validation *domain.ValidationError

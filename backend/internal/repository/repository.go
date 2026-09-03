@@ -63,6 +63,24 @@ type MessageRepository interface {
 	CanAccessGym(context.Context, string, string) (bool, error)
 	ShareGym(context.Context, string, string) (bool, error)
 }
+type TicketFilter struct {
+	ActorID       string
+	ActorRole     domain.Role
+	Status        *domain.TicketStatus
+	Category      *domain.TicketCategory
+	Search        string
+	Limit, Offset int
+}
+type TicketRepository interface {
+	CreateTicket(context.Context, *domain.SupportTicket, *domain.SupportTicketMessage) error
+	ListTickets(context.Context, TicketFilter) ([]domain.SupportTicket, error)
+	GetTicket(context.Context, string) (*domain.SupportTicket, error)
+	ListTicketMessages(context.Context, string) ([]domain.SupportTicketMessage, error)
+	AddTicketReply(context.Context, *domain.SupportTicketMessage, domain.TicketStatus, *string) error
+	SetTicketStatus(context.Context, string, domain.TicketStatus, *string, *time.Time) error
+	MarkTicketRead(context.Context, string, domain.Role) error
+	CountUnreadTickets(context.Context, string, domain.Role) (int64, error)
+}
 type WalletRepository interface {
 	GetPolicy(context.Context) (domain.WithdrawalPolicy, error)
 	SetPolicy(context.Context, domain.WithdrawalPolicy) error

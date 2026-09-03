@@ -119,7 +119,8 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
 
       <footer>
         <SiteLogo href={`/${locale}`} priority />
-        <p>سامانه مدیریت باشگاه، مربی و ورزشکار</p>
+        <p>سامانه مدیریت باشگاه‌های ورزشی</p>
+        <Link href={`/${locale}/terms`}>شرایط و قوانین استفاده</Link>
       </footer>
     </main>
   );

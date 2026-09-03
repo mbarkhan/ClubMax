@@ -1,8 +1,7 @@
 package domain
 
-// Schema is the complete database model for a fresh ClubMax installation.
-// The project is still pre-production, so schema changes are applied here and
-// the development database is recreated instead of maintaining versioned SQL scripts.
+// Schema contains the initial database model. Later changes are applied by the
+// versioned migrations in the postgres repository package.
 const Schema = `
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 

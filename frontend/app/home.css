@@ -35,3 +35,5 @@
 @keyframes showcase-loading{to{background-position:-220% 0}}
 @media(max-width:760px){.gym-showcase{width:calc(100% - 28px);margin:60px auto;border-radius:22px}.showcase-slide{grid-template-columns:1fr;min-height:0}.showcase-media{min-height:235px}.showcase-shade{background:linear-gradient(180deg,transparent 55%,#102f26 100%)}.showcase-content{padding:32px 24px 76px}.showcase-content h2{font-size:30px}.showcase-content dl{grid-template-columns:1fr;margin:20px 0}.showcase-arrows{left:18px;bottom:18px}.showcase-dots{right:22px;bottom:25px}.showcase-skeleton{height:520px}}
 @media(prefers-reduced-motion:reduce){.showcase-slide,.showcase-media img,.showcase-progress,.showcase-skeleton{animation:none}}
+.home footer>a{font-size:12px;color:var(--green);font-weight:700}
+@media(max-width:760px){.home footer p{margin:15px 0}.home footer>a{display:inline-block}}

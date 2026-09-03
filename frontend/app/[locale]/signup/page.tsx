@@ -351,7 +351,9 @@ export default function Signup() {
           <input type="checkbox" name="information_accuracy_confirmed" required />
           <span>
             اینجانب صحت و کامل بودن اطلاعات و مدارک واردشده را تأیید می‌کنم و مسئولیت هرگونه مغایرت،
-            نقص یا ارائه اطلاعات نادرست را بر عهده می‌گیرم.
+            نقص یا ارائه اطلاعات نادرست را بر عهده می‌گیرم و با {" "}
+            <Link href={`/${locale}/terms`} target="_blank">شرایط و قوانین استفاده از کلاب ماکس</Link>
+            {" "}موافقم.
           </span>
         </label>
         {error && <div className="alert">{error}</div>}

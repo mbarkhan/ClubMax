@@ -37,6 +37,7 @@ func main() {
 	gyms := service.NewGymService(postgres.GymStore{Store: store}, store)
 	finance := service.NewFinanceService(store, store, postgres.GymStore{Store: store})
 	messages := service.NewMessageService(postgres.MessageStore{Store: store}, store)
+	tickets := service.NewTicketService(store, messages)
 	admin := service.NewAdminService(store)
 	backups, err := service.NewBackupService(service.BackupConfig{
 		DatabaseHost: cfg.ServerIP, DatabasePort: cfg.DatabasePort, DatabaseName: cfg.DatabaseName,
@@ -50,7 +51,7 @@ func main() {
 	bootstrapAdmin(ctx, users)
 	go runWithdrawalSettlement(ctx, finance)
 	go backups.Run(ctx, log.Printf)
-	srv := &http.Server{Addr: cfg.BackendAddress(), Handler: handler.New(users, gyms, finance, messages, admin, backups, cfg.JWTSecret, cfg.FrontendOrigin(), cfg.UploadDir), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
+	srv := &http.Server{Addr: cfg.BackendAddress(), Handler: handler.New(users, gyms, finance, messages, tickets, admin, backups, cfg.JWTSecret, cfg.FrontendOrigin(), cfg.UploadDir), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("ClubMax API listening on %s", srv.Addr)
 	log.Fatal(srv.ListenAndServe())
 }

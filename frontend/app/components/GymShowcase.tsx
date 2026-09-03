@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import {useEffect, useState} from "react";
+import { useEffect, useState } from "react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8081";
-const SLIDE_DURATION = 2000;
+const SLIDE_DURATION = 4000;
 
 type ShowcaseGym = {
   id: string;
@@ -19,7 +19,7 @@ type ShowcaseGym = {
 
 const shortTime = (value: string) => value?.slice(0, 5) || "—";
 
-export default function GymShowcase({locale}: {locale: string}) {
+export default function GymShowcase({ locale }: { locale: string }) {
   const [gyms, setGyms] = useState<ShowcaseGym[]>([]);
   const [active, setActive] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -27,7 +27,7 @@ export default function GymShowcase({locale}: {locale: string}) {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`${API}/v1/gyms/showcase`, {signal: controller.signal, cache: "no-store"})
+    fetch(`${API}/v1/gyms/showcase`, { signal: controller.signal, cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error("showcase request failed");
         return response.json();
