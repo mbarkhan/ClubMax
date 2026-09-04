@@ -6,6 +6,12 @@ clubmax.ir {
 }
 
 www.clubmax.ir {
+	@enamad path /2268026.txt
+	handle @enamad {
+		root * /var/www/enamad
+		file_server
+	}
+
 	@api path /v1/*
 	reverse_proxy @api 127.0.0.1:8081
 	reverse_proxy 127.0.0.1:3001
