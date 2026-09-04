@@ -2,6 +2,12 @@
 # Caddy obtains and renews TLS certificates automatically.
 
 clubmax.ir {
+	@enamad path /2268026.txt
+	handle @enamad {
+		root * /var/www/enamad
+		file_server
+	}
+
 	redir https://www.clubmax.ir{uri} permanent
 }
 
