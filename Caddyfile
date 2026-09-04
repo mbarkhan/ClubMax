@@ -1,0 +1,12 @@
+# Install this file as /etc/caddy/Caddyfile on the production server.
+# Caddy obtains and renews TLS certificates automatically.
+
+clubmax.ir {
+	redir https://www.clubmax.ir{uri} permanent
+}
+
+www.clubmax.ir {
+	@api path /v1/*
+	reverse_proxy @api 127.0.0.1:8081
+	reverse_proxy 127.0.0.1:3001
+}

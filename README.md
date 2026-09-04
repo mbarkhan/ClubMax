@@ -70,4 +70,27 @@ ClubMax/
    make docker-logs
    ```
 
-برای توقف بدون حذف داده‌ها از `make docker-down` استفاده کنید. از اجرای `docker compose down --volumes` روی سرور اصلی خودداری کنید، زیرا volumeهای دائمی دیتابیس و فایل‌ها را حذف می‌کند. این Compose در مرحله فعلی پورت‌های 3001 و 8081 را منتشر می‌کند؛ HTTPS و اتصال دامنه باید در مرحله بعد با reverse proxy روی پورت‌های 80 و 443 اضافه شود.
+برای توقف بدون حذف داده‌ها از `make docker-down` استفاده کنید. از اجرای `docker compose down --volumes` روی سرور اصلی خودداری کنید، زیرا volumeهای دائمی دیتابیس و فایل‌ها را حذف می‌کند.
+
+### دامنه و HTTPS با Caddy
+
+برای اجرای `clubmax.ir` بدون شماره پورت، رکوردهای `A` دامنه و `www` را به IP سرور اشاره دهید و پورت‌های TCP 80 و 443 را باز کنید. فایل `Caddyfile` مخزن، `clubmax.ir` را به `https://www.clubmax.ir` هدایت می‌کند؛ ترافیک رابط کاربری به `127.0.0.1:3001` و درخواست‌های API در مسیر `/v1/*` به `127.0.0.1:8081` فرستاده می‌شوند.
+
+در `clubmax.env` سرور، مقادیر زیر را قرار دهید:
+
+```dotenv
+CLUBMAX_BIND_IP=127.0.0.1
+CLUBMAX_PUBLIC_HOST=www.clubmax.ir
+CLUBMAX_FRONTEND_ORIGIN=https://www.clubmax.ir
+CLUBMAX_PUBLIC_API_URL=https://www.clubmax.ir
+```
+
+پس از نصب Caddy، پیکربندی را نصب و بارگذاری کنید:
+
+```bash
+sudo install -m 644 Caddyfile /etc/caddy/Caddyfile
+sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+sudo systemctl reload caddy
+```
+
+Caddy گواهی TLS را به‌صورت خودکار صادر و تمدید می‌کند. پورت‌های 3001 و 8081 نباید به اینترنت منتشر شوند؛ با `CLUBMAX_BIND_IP=127.0.0.1` فقط Caddy به آن‌ها دسترسی دارد.
