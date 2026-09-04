@@ -14,6 +14,7 @@ type UserFilter struct {
 type UserRepository interface {
 	Create(context.Context, *domain.User) error
 	Update(context.Context, *domain.User) error
+	UpdatePassword(context.Context, string, string) error
 	UpdatePhone(context.Context, string, string) error
 	PromoteToAdmin(context.Context, string, string, string) error
 	GetByID(context.Context, string) (*domain.User, error)

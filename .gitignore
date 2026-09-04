@@ -6,5 +6,6 @@ coverage.out
 frontend/node_modules/
 frontend/.next/
 frontend/.next-dev/
+frontend/tsconfig.tsbuildinfo
 .local/
 clubmax.env

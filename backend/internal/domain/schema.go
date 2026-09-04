@@ -7,7 +7,8 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 DO $$ BEGIN CREATE TYPE user_role AS ENUM ('admin','coach','athlete','operator'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE document_kind AS ENUM ('coaching','insurance','other','profile'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE otp_purpose AS ENUM ('register','change_phone','login','delete_account'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE otp_purpose AS ENUM ('register','change_phone','login','delete_account','password_reset'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TYPE otp_purpose ADD VALUE IF NOT EXISTS 'password_reset';
 DO $$ BEGIN CREATE TYPE tuition_mode AS ENUM ('monthly','per_session','course'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS users (

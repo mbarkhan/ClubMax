@@ -250,6 +250,77 @@ func (s *UserService) CompletePhoneChange(ctx context.Context, userID, phone, co
 	}
 	return s.otps.Consume(ctx, ch.ID, s.now())
 }
+func validPassword(password string) bool {
+	return len(password) >= 8 && len(password) <= 72
+}
+func (s *UserService) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	if !validPassword(newPassword) || currentPassword == newPassword {
+		return domain.InvalidField("password")
+	}
+	u, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if u.PasswordHash == nil || !comparePassword(*u.PasswordHash, currentPassword) {
+		return domain.ErrInvalidCredentials
+	}
+	hash, err := hashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	return s.users.UpdatePassword(ctx, userID, hash)
+}
+
+// StartPasswordReset and CompletePasswordReset are deliberately not exposed as
+// HTTP routes until an SMS provider is configured. They keep the OTP workflow
+// ready without allowing an unauthenticated password reset in development.
+func (s *UserService) StartPasswordReset(ctx context.Context, phone string) error {
+	phone = normalizePhone(phone)
+	if !validPhone(phone) {
+		return domain.ErrInvalid
+	}
+	u, err := s.users.GetByPhone(ctx, phone)
+	if errors.Is(err, domain.ErrNotFound) {
+		return nil // Do not reveal whether a phone number has an account.
+	}
+	if err != nil {
+		return err
+	}
+	if !u.Active || !u.Role.ValidForRegistration() || !u.PhoneVerified {
+		return nil
+	}
+	code, err := generateOTP()
+	if err != nil {
+		return err
+	}
+	id := uuid.NewString()
+	challenge := &domain.OTPChallenge{ID: id, Phone: phone, CodeHash: otpHash(id, code, s.pepper), Purpose: domain.OTPPasswordReset, UserID: &u.ID, ExpiresAt: s.now().Add(2 * time.Minute), CreatedAt: s.now()}
+	if err = s.otps.Create(ctx, challenge); err != nil {
+		return err
+	}
+	return s.notify.Send(ctx, phone, code)
+}
+func (s *UserService) CompletePasswordReset(ctx context.Context, phone, code, password string) error {
+	phone = normalizePhone(phone)
+	if !validPhone(phone) || !validPassword(password) {
+		return domain.ErrInvalid
+	}
+	challenge, err := s.verifyOTP(ctx, phone, code, domain.OTPPasswordReset)
+	if err != nil {
+		return err
+	}
+	if challenge.UserID == nil {
+		return domain.ErrInvalidOTP
+	}
+	hash, err := hashPassword(password)
+	if err != nil {
+		return err
+	}
+	if err = s.users.UpdatePassword(ctx, *challenge.UserID, hash); err != nil {
+		return err
+	}
+	return s.otps.Consume(ctx, challenge.ID, s.now())
+}
 func (s *UserService) StartAccountDeletion(ctx context.Context, userID string) error {
 	u, e := s.users.GetByID(ctx, userID)
 	if e != nil {

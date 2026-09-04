@@ -1,6 +1,7 @@
 import Link from "next/link";
 import SiteLogo from "../components/SiteLogo";
 import GymShowcase from "../components/GymShowcase";
+import HomeAccountActions from "../components/HomeAccountActions";
 import "../home.css";
 
 const overviewItems = [
@@ -58,14 +59,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           <a href="#features">امکانات</a>
           <a href="#gyms">باشگاه‌ها</a>
         </nav>
-        <div>
-          <Link className="login-link" href={`/${locale}/login`}>
-            ورود
-          </Link>
-          <Link className="join-link" href={`/${locale}/signup`}>
-            ثبت‌نام رایگان
-          </Link>
-        </div>
+        <HomeAccountActions locale={locale} />
       </header>
       <section className="home-hero">
         <div>
@@ -127,7 +121,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           <Link href={`/${locale}/about`}>درباره ما</Link>
           <Link href={`/${locale}/contact`}>تماس با ما</Link>
           <Link href={`/${locale}/terms`}>قوانین و مقررات</Link>
-          <Link href={`/${locale}/privacy`}>سیاست حریم خصوصی</Link>
+          <Link href={`/${locale}/privacy`}> حریم خصوصی</Link>
           <Link href={`/${locale}/refunds`}>لغو و استرداد وجه</Link>
           <Link href={`/${locale}/pricing`}>خدمات و قیمت‌ها</Link>
         </nav>

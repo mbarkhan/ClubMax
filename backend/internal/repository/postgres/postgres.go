@@ -77,6 +77,13 @@ func (s *Store) UpdatePhone(c context.Context, id, phone string) error {
 	}
 	return dbError(e)
 }
+func (s *Store) UpdatePassword(c context.Context, id, passwordHash string) error {
+	tag, e := s.DB.Exec(c, `UPDATE users SET password_hash=$2,updated_at=now() WHERE id=$1`, id, passwordHash)
+	if e == nil && tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return dbError(e)
+}
 func (s *Store) PromoteToAdmin(c context.Context, id, username, passwordHash string) error {
 	tag, e := s.DB.Exec(c, `UPDATE users SET role='admin',username=$2,password_hash=$3,phone=NULL,bank_iban=NULL,updated_at=now() WHERE id=$1`, id, username, passwordHash)
 	if e == nil && tag.RowsAffected() == 0 {

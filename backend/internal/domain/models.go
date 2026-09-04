@@ -202,10 +202,11 @@ type AthletePayment struct {
 type OTPPurpose string
 
 const (
-	OTPRegister    OTPPurpose = "register"
-	OTPChangePhone OTPPurpose = "change_phone"
-	OTPLogin       OTPPurpose = "login"
-	OTPDelete      OTPPurpose = "delete_account"
+	OTPRegister      OTPPurpose = "register"
+	OTPChangePhone   OTPPurpose = "change_phone"
+	OTPLogin         OTPPurpose = "login"
+	OTPDelete        OTPPurpose = "delete_account"
+	OTPPasswordReset OTPPurpose = "password_reset"
 )
 
 type OTPChallenge struct {

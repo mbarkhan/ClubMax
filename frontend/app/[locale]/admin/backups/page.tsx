@@ -18,7 +18,8 @@ type BackupStatus = {
 
 const formatSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes.toLocaleString("fa-IR")} بایت`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toLocaleString("fa-IR", { maximumFractionDigits: 1 })} کیلوبایت`;
+  if (bytes < 1024 * 1024)
+    return `${(bytes / 1024).toLocaleString("fa-IR", { maximumFractionDigits: 1 })} کیلوبایت`;
   return `${(bytes / 1024 / 1024).toLocaleString("fa-IR", { maximumFractionDigits: 1 })} مگابایت`;
 };
 
@@ -63,10 +64,15 @@ export default function BackupsPage({ params }: { params: Promise<{ locale: stri
     setDownloading(true);
     setError("");
     try {
-      const response = await fetch(`${API}/v1/admin/backups/download?include_files=${includeFiles}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("clubmax_access_token") || ""}` },
-      });
+      const response = await fetch(
+        `${API}/v1/admin/backups/download?include_files=${includeFiles}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("clubmax_access_token") || ""}`,
+          },
+        }
+      );
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.message || "تهیه پشتیبان کامل انجام نشد.");
@@ -130,7 +136,12 @@ export default function BackupsPage({ params }: { params: Promise<{ locale: stri
       setError("ابتدا فایل پشتیبان کامل را انتخاب کنید.");
       return;
     }
-    if (!window.confirm("تمام اطلاعات فعلی پایگاه داده و فایل‌های آپلودشده جایگزین می‌شوند. از ادامه مطمئن هستید؟")) return;
+    if (
+      !window.confirm(
+        "تمام اطلاعات فعلی پایگاه داده و فایل‌های آپلودشده جایگزین می‌شوند. از ادامه مطمئن هستید؟"
+      )
+    )
+      return;
     setRestoring(true);
     setError("");
     setSuccess("");
@@ -170,7 +181,7 @@ export default function BackupsPage({ params }: { params: Promise<{ locale: stri
           <small>منطقه زمانی Asia/Tehran</small>
         </article>
         <article className="admin-stat">
-          <span>سیاست نگهداری</span>
+          <span> نگهداری</span>
           <strong>{status ? status.retention.toLocaleString("fa-IR") : "—"}</strong>
           <small>آخرین فایل پشتیبان پایگاه داده</small>
         </article>
@@ -196,14 +207,20 @@ export default function BackupsPage({ params }: { params: Promise<{ locale: stri
                     type="time"
                     value={value}
                     onChange={(event) =>
-                      setSchedule(schedule.map((item, itemIndex) => itemIndex === index ? event.target.value : item))
+                      setSchedule(
+                        schedule.map((item, itemIndex) =>
+                          itemIndex === index ? event.target.value : item
+                        )
+                      )
                     }
                   />
                   <button
                     type="button"
                     aria-label="حذف زمان"
                     disabled={schedule.length === 1}
-                    onClick={() => setSchedule(schedule.filter((_, itemIndex) => itemIndex !== index))}
+                    onClick={() =>
+                      setSchedule(schedule.filter((_, itemIndex) => itemIndex !== index))
+                    }
                   >
                     ×
                   </button>
@@ -241,7 +258,11 @@ export default function BackupsPage({ params }: { params: Promise<{ locale: stri
             آپلودشده را نیز به آن اضافه کنید.
           </p>
           <label className="backup-include-files">
-            <input type="checkbox" checked={includeFiles} onChange={(event) => setIncludeFiles(event.target.checked)} />
+            <input
+              type="checkbox"
+              checked={includeFiles}
+              onChange={(event) => setIncludeFiles(event.target.checked)}
+            />
             <span>پشتیبان‌گیری از کلیه فایل‌های آپلودشده</span>
           </label>
           <small>این فایل حاوی اطلاعات حساس کاربران است؛ آن را فقط در محل امن نگهداری کنید.</small>
@@ -256,9 +277,9 @@ export default function BackupsPage({ params }: { params: Promise<{ locale: stri
           <span className="admin-badge danger">عملیات حساس</span>
           <h2>بازیابی پشتیبان کامل</h2>
           <p>
-            فایل <b>clubmax-*.tar.gz</b> را انتخاب کنید. اگر آرشیو شامل فایل‌های آپلودی باشد،
-            تصاویر و مدارک فعلی جایگزین می‌شوند؛ در پشتیبان فقط‌دیتابیس، فایل‌های فعلی بدون تغییر
-            باقی می‌مانند.
+            فایل <b>clubmax-*.tar.gz</b> را انتخاب کنید. اگر آرشیو شامل فایل‌های آپلودی باشد، تصاویر
+            و مدارک فعلی جایگزین می‌شوند؛ در پشتیبان فقط‌دیتابیس، فایل‌های فعلی بدون تغییر باقی
+            می‌مانند.
           </p>
         </div>
         <div className="backup-restore-actions">
@@ -303,7 +324,9 @@ export default function BackupsPage({ params }: { params: Promise<{ locale: stri
                     <td className="ltr">{file.name}</td>
                     <td>{formatDate(file.created_at)}</td>
                     <td>{formatSize(file.size)}</td>
-                    <td><span className="admin-badge">ذخیره‌شده</span></td>
+                    <td>
+                      <span className="admin-badge">ذخیره‌شده</span>
+                    </td>
                   </tr>
                 ))}
               </tbody>

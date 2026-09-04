@@ -7,7 +7,7 @@ const legalLinks = [
   ["about", "درباره ما"],
   ["contact", "تماس با ما"],
   ["terms", "قوانین و مقررات"],
-  ["privacy", "سیاست حریم خصوصی"],
+  ["privacy", " حریم خصوصی"],
   ["refunds", "لغو و استرداد وجه"],
   ["pricing", "خدمات و قیمت‌ها"],
 ] as const;
@@ -31,8 +31,12 @@ export default function LegalPage({
         <SiteLogo href={`/${locale}`} priority />
         <nav aria-label="مسیرهای اصلی">
           <Link href={`/${locale}`}>صفحه اصلی</Link>
-          <Link className="terms-login" href={`/${locale}/login`}>ورود</Link>
-          <Link className="terms-join" href={`/${locale}/signup`}>ثبت‌نام رایگان</Link>
+          <Link className="terms-login" href={`/${locale}/login`}>
+            ورود
+          </Link>
+          <Link className="terms-join" href={`/${locale}/signup`}>
+            ثبت‌نام رایگان
+          </Link>
         </nav>
       </header>
       <section className="terms-hero">
@@ -47,7 +51,11 @@ export default function LegalPage({
         <aside>
           <strong>اطلاعات و قوانین</strong>
           <nav>
-            {legalLinks.map(([path, label]) => <Link key={path} href={`/${locale}/${path}`}>{label}</Link>)}
+            {legalLinks.map(([path, label]) => (
+              <Link key={path} href={`/${locale}/${path}`}>
+                {label}
+              </Link>
+            ))}
           </nav>
         </aside>
         <article className="terms-content">{children}</article>

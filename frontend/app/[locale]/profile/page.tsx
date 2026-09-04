@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import LocationFields from "../../components/LocationFields";
 import JalaliDateInput from "../../components/JalaliDateInput";
 import IranianIBANInput from "../../components/IranianIBANInput";
+import PasswordField from "../../components/PasswordField";
 import "../../auth.css";
 
 const API = process.env.NEXT_PUBLIC_API_URL!;
@@ -61,7 +62,8 @@ export default function Profile({ params }: { params: Promise<{ locale: string }
     [phoneStep, setPhoneStep] = useState(false),
     [deleteStep, setDeleteStep] = useState(false),
     [deleteCode, setDeleteCode] = useState(""),
-    [deleteConfirmed, setDeleteConfirmed] = useState(false);
+    [deleteConfirmed, setDeleteConfirmed] = useState(false),
+    [passwordSaving, setPasswordSaving] = useState(false);
   const token = () => localStorage.getItem("clubmax_access_token") || "",
     headers = () => ({
       Authorization: `Bearer ${token()}`,
@@ -198,6 +200,35 @@ export default function Profile({ params }: { params: Promise<{ locale: string }
     }
     localStorage.clear();
     router.replace(`/${locale}`);
+  }
+  async function changePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget),
+      currentPassword = String(form.get("current_password") || ""),
+      newPassword = String(form.get("new_password") || ""),
+      confirmation = String(form.get("password_confirmation") || "");
+    setError("");
+    setMessage("");
+    if (newPassword !== confirmation) {
+      setError("رمز عبور جدید و تکرار آن یکسان نیستند.");
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      const response = await fetch(`${API}/v1/users/me/password`, {
+          method: "PUT",
+          headers: headers(),
+          body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+        }),
+        data = await response.json();
+      if (!response.ok) throw new Error(data.message || "تغییر رمز عبور انجام نشد.");
+      event.currentTarget.reset();
+      setMessage(data.message);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "تغییر رمز عبور انجام نشد.");
+    } finally {
+      setPasswordSaving(false);
+    }
   }
   if (!user)
     return (
@@ -354,6 +385,20 @@ export default function Profile({ params }: { params: Promise<{ locale: string }
           {saving ? "در حال ذخیره..." : "ذخیره تغییرات"}
         </button>
       </form>
+      <section className="signup-card account-settings password-settings">
+        <h2>رمز عبور</h2>
+        <p>برای تغییر رمز، ابتدا رمز فعلی را وارد کنید. رمز جدید باید حداقل ۸ کاراکتر باشد.</p>
+        <form onSubmit={changePassword}>
+          <PasswordField name="current_password" label="رمز عبور فعلی" autoComplete="current-password" />
+          <PasswordField name="new_password" label="رمز عبور جدید" />
+          <PasswordField name="password_confirmation" label="تکرار رمز عبور جدید" />
+          {error && <div className="alert">{error}</div>}
+          {message && <div className="profile-success">{message}</div>}
+          <button className="submit" disabled={passwordSaving}>
+            {passwordSaving ? "در حال تغییر..." : "تغییر رمز عبور"}
+          </button>
+        </form>
+      </section>
       {user.role !== "admin" && (
         <section className="signup-card account-settings">
           <h2>شماره موبایل</h2>

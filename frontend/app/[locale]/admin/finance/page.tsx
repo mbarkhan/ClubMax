@@ -19,7 +19,9 @@ export default function FinancePage({ params }: { params: Promise<{ locale: stri
     [message, setMessage] = useState(""),
     [error, setError] = useState("");
   useEffect(() => {
-    const headers = { Authorization: `Bearer ${localStorage.getItem("clubmax_access_token") || ""}` };
+    const headers = {
+      Authorization: `Bearer ${localStorage.getItem("clubmax_access_token") || ""}`,
+    };
     Promise.all([
       fetch(`${API}/v1/finance/policy`, { headers }),
       fetch(`${API}/v1/admin/overview`, { headers }),
@@ -85,7 +87,7 @@ export default function FinancePage({ params }: { params: Promise<{ locale: stri
       </div>
       <section className="admin-panel" style={{ marginTop: 16 }}>
         <div className="admin-section-title">
-          <h2>سیاست برداشت مربیان</h2>
+          <h2>برداشت مربیان</h2>
         </div>
         {message && <div className="success-message">{message}</div>}
         {error && <div className="alert">{error}</div>}

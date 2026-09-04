@@ -69,6 +69,7 @@ func New(u *service.UserService, c *service.GymService, f *service.FinanceServic
 			r.Use(a.identity)
 			r.Post("/auth/phone-change/start", a.startPhoneChange)
 			r.Post("/auth/phone-change/complete", a.completePhoneChange)
+			r.With(rateLimit(5, time.Minute)).Put("/users/me/password", a.changePassword)
 			r.With(rateLimit(5, time.Minute)).Post("/users/me/deletion/start", a.startAccountDeletion)
 			r.With(rateLimit(10, time.Minute)).Post("/users/me/deletion/complete", a.completeAccountDeletion)
 			r.Get("/users/me", a.me)
@@ -286,6 +287,17 @@ func (a *API) completePhoneChange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond(w, a.users.CompletePhoneChange(r.Context(), current(r).ID, v.Phone, v.Code), 200, map[string]string{"message": message(w, "phone_updated")})
+}
+func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
+	var v struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if decode(w, r, &v) != nil {
+		return
+	}
+	e := a.users.ChangePassword(r.Context(), current(r).ID, v.CurrentPassword, v.NewPassword)
+	respond(w, e, http.StatusOK, map[string]string{"message": "رمز عبور با موفقیت تغییر کرد."})
 }
 func (a *API) getUser(w http.ResponseWriter, r *http.Request) {
 	actor := current(r)
