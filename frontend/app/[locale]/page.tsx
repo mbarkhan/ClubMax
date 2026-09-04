@@ -121,6 +121,20 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
         <SiteLogo href={`/${locale}`} priority />
         <p>سامانه مدیریت باشگاه‌های ورزشی</p>
         <Link href={`/${locale}/terms`}>شرایط و قوانین استفاده</Link>
+        <a
+          referrerPolicy="origin"
+          target="_blank"
+          rel="noopener noreferrer"
+          href="https://trustseal.enamad.ir/?id=7602840&Code=5n5Id1FsuaMUVoh9vpxAgsDuZy8H2t3Z"
+          aria-label="نماد اعتماد الکترونیکی"
+        >
+          <img
+            referrerPolicy="origin"
+            src="https://trustseal.enamad.ir/logo.aspx?id=7602840&Code=5n5Id1FsuaMUVoh9vpxAgsDuZy8H2t3Z"
+            alt="نماد اعتماد الکترونیکی"
+            style={{ cursor: "pointer" }}
+          />
+        </a>
       </footer>
     </main>
   );
