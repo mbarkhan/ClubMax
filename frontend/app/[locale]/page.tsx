@@ -123,7 +123,14 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
       <footer>
         <SiteLogo href={`/${locale}`} priority />
         <p>سامانه مدیریت باشگاه‌های ورزشی</p>
-        <Link href={`/${locale}/terms`}>شرایط و قوانین استفاده</Link>
+        <nav className="home-footer-links" aria-label="اطلاعات و قوانین">
+          <Link href={`/${locale}/about`}>درباره ما</Link>
+          <Link href={`/${locale}/contact`}>تماس با ما</Link>
+          <Link href={`/${locale}/terms`}>قوانین و مقررات</Link>
+          <Link href={`/${locale}/privacy`}>سیاست حریم خصوصی</Link>
+          <Link href={`/${locale}/refunds`}>لغو و استرداد وجه</Link>
+          <Link href={`/${locale}/pricing`}>خدمات و قیمت‌ها</Link>
+        </nav>
         <span dangerouslySetInnerHTML={{ __html: enamadTrustSeal }} />
       </footer>
     </main>
