@@ -8,7 +8,8 @@ clubmax.ir {
 		file_server
 	}
 
-	redir https://www.clubmax.ir{uri} permanent
+	@non_enamad not path /2268026.txt
+	redir @non_enamad https://www.clubmax.ir{uri} permanent
 }
 
 www.clubmax.ir {
