@@ -61,6 +61,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
         </nav>
         <HomeAccountActions locale={locale} />
       </header>
+      <GymShowcase locale={locale} />
       <section className="home-hero">
         <div>
           <span>مدیریت حرفه‌ای باشگاه ورزشی</span>
@@ -112,7 +113,6 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           ))}
         </div>
       </section>
-      <GymShowcase locale={locale} />
 
       <footer>
         <SiteLogo href={`/${locale}`} priority />

@@ -12,6 +12,7 @@
 .hero-card .hero-card-item small{font-size:11px;font-weight:400;line-height:1.7;color:#b7c9c2}
 
 .gym-showcase{position:relative;width:min(1180px,calc(100% - 48px));min-height:450px;margin:90px auto;overflow:hidden;border-radius:30px;background:#102f26;color:#fff;box-shadow:0 30px 80px #143a2d2b;direction:ltr;isolation:isolate}
+.home>header+.gym-showcase{margin-top:0}
 .showcase-slide{min-height:450px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(370px,.85fr);animation:showcase-enter .45s ease both}
 .showcase-media{position:relative;min-height:450px;overflow:hidden;background:radial-gradient(circle at 35% 45%,#68a988 0 2%,transparent 3%),linear-gradient(135deg,#1c6049,#0b211b)}
 .showcase-media:before,.showcase-media:after{content:"";position:absolute;border:1px solid #d9f67d3d;border-radius:50%;z-index:0}
@@ -33,7 +34,7 @@
 @keyframes showcase-image{from{transform:scale(1.04)}to{transform:scale(1)}}
 @keyframes showcase-progress{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes showcase-loading{to{background-position:-220% 0}}
-@media(max-width:760px){.gym-showcase{width:calc(100% - 28px);margin:60px auto;border-radius:22px}.showcase-slide{grid-template-columns:1fr;min-height:0}.showcase-media{min-height:235px}.showcase-shade{background:linear-gradient(180deg,transparent 55%,#102f26 100%)}.showcase-content{padding:32px 24px 76px}.showcase-content h2{font-size:30px}.showcase-content dl{grid-template-columns:1fr;margin:20px 0}.showcase-arrows{left:18px;bottom:18px}.showcase-dots{right:22px;bottom:25px}.showcase-skeleton{height:520px}}
+@media(max-width:760px){.gym-showcase{width:calc(100% - 28px);margin:60px auto;border-radius:22px}.home>header+.gym-showcase{margin-top:0}.showcase-slide{grid-template-columns:1fr;min-height:0}.showcase-media{min-height:235px}.showcase-shade{background:linear-gradient(180deg,transparent 55%,#102f26 100%)}.showcase-content{padding:32px 24px 76px}.showcase-content h2{font-size:30px}.showcase-content dl{grid-template-columns:1fr;margin:20px 0}.showcase-arrows{left:18px;bottom:18px}.showcase-dots{right:22px;bottom:25px}.showcase-skeleton{height:520px}}
 @media(prefers-reduced-motion:reduce){.showcase-slide,.showcase-media img,.showcase-progress,.showcase-skeleton{animation:none}}
 .home footer>a{font-size:12px;color:var(--green);font-weight:700}
 @media(max-width:760px){.home footer p{margin:15px 0}.home footer>a{display:inline-block}}
