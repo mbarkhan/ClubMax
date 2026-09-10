@@ -6,7 +6,7 @@ import {useRouter} from "next/navigation";
 import "../../../../catalog.css";
 import "../../../../roster.css";
 
-const API=process.env.NEXT_PUBLIC_API_URL!;
+const API="";
 type Athlete={id:string;first_name:string;last_name:string;phone?:string;age:number;tuition_status:"settled"|"debtor";unpaid_months:number;outstanding_amount:number;registered_at:string};
 
 export default function GymAthletes({params}:{params:Promise<{locale:string;id:string}>}){

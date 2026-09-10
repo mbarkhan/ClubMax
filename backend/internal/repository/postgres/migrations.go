@@ -38,6 +38,39 @@ CREATE INDEX IF NOT EXISTS support_ticket_messages_thread ON support_ticket_mess
 	// Some pre-migration installations already have the ticket tables with this
 	// obsolete column. IF EXISTS keeps this migration safe for fresh databases.
 	{version: 3, name: "remove_ticket_priority", sql: `ALTER TABLE support_tickets DROP COLUMN IF EXISTS priority;`},
+	{version: 4, name: "payment_orders", sql: `
+CREATE TABLE IF NOT EXISTS payment_orders (
+ id uuid PRIMARY KEY, athlete_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ gym_id uuid NOT NULL REFERENCES gyms(id) ON DELETE CASCADE,
+ kind varchar(20) NOT NULL CHECK(kind IN ('registration','monthly')),
+ tuition_amount bigint NOT NULL CHECK(tuition_amount>=0), platform_fee bigint NOT NULL CHECK(platform_fee>=0),
+ total_amount bigint NOT NULL CHECK(total_amount=tuition_amount+platform_fee),
+ billing_year smallint NOT NULL CHECK(billing_year BETWEEN 1300 AND 1600),
+ billing_month smallint NOT NULL CHECK(billing_month BETWEEN 1 AND 12),
+ status varchar(20) NOT NULL CHECK(status IN ('created','pending','succeeded','failed')),
+ zibal_track_id bigint UNIQUE, zibal_ref_number varchar(100),
+ failure_reason text, expires_at timestamptz NOT NULL, completed_at timestamptz,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+ CONSTRAINT payment_orders_gateway_status_check CHECK(status NOT IN ('pending','succeeded') OR zibal_track_id IS NOT NULL),
+ CHECK((status='succeeded') = (completed_at IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS payment_orders_athlete_gym_active ON payment_orders(athlete_id,gym_id,created_at DESC) WHERE status IN ('created','pending');
+CREATE UNIQUE INDEX IF NOT EXISTS payment_orders_zibal_ref_unique ON payment_orders(zibal_ref_number) WHERE zibal_ref_number IS NOT NULL;
+CREATE TABLE IF NOT EXISTS payment_order_months (
+ order_id uuid NOT NULL REFERENCES payment_orders(id) ON DELETE CASCADE,
+ billing_year smallint NOT NULL CHECK(billing_year BETWEEN 1300 AND 1600),
+ billing_month smallint NOT NULL CHECK(billing_month BETWEEN 1 AND 12),
+ amount bigint NOT NULL CHECK(amount>=0), PRIMARY KEY(order_id,billing_year,billing_month)
+);
+ALTER TABLE tuition_payments ADD COLUMN IF NOT EXISTS payment_order_id uuid REFERENCES payment_orders(id) ON DELETE RESTRICT;
+CREATE INDEX IF NOT EXISTS tuition_payments_order_id ON tuition_payments(payment_order_id);`},
+	// This is intentionally separate so installations that briefly ran migration
+	// 4 before the security review also stop retaining card data.
+	{version: 5, name: "harden_payment_orders", sql: `
+ALTER TABLE payment_orders DROP COLUMN IF EXISTS zibal_card_number;
+CREATE UNIQUE INDEX IF NOT EXISTS payment_orders_zibal_ref_unique ON payment_orders(zibal_ref_number) WHERE zibal_ref_number IS NOT NULL;
+ALTER TABLE tuition_payments ADD COLUMN IF NOT EXISTS payment_order_id uuid REFERENCES payment_orders(id) ON DELETE RESTRICT;
+CREATE INDEX IF NOT EXISTS tuition_payments_order_id ON tuition_payments(payment_order_id);`},
 }
 
 func runMigrations(ctx context.Context, pool *pgxpool.Pool) error {

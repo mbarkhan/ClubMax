@@ -29,6 +29,8 @@ type Config struct {
 	DatabaseContainer string
 	BackupHours       []int
 	BackupRetention   int
+	ZibalMerchant     string
+	ZibalGatewayURL   string
 }
 
 func Load() (Config, error) {
@@ -46,10 +48,18 @@ func Load() (Config, error) {
 		UploadDir:         required("CLUBMAX_UPLOAD_DIR"),
 		BackupDir:         required("CLUBMAX_BACKUP_DIR"),
 		DatabaseContainer: required("CLUBMAX_DATABASE_CONTAINER"),
+		ZibalMerchant:     required("CLUBMAX_ZIBAL_MERCHANT"),
+		ZibalGatewayURL:   required("CLUBMAX_ZIBAL_GATEWAY_URL"),
 	}
 	if c.ServerIP == "" || c.BindIP == "" || c.PublicHost == "" || c.FrontendPort == "" || c.BackendPort == "" || c.DatabasePort == "" ||
-		c.DatabaseName == "" || c.DatabaseUser == "" || c.DatabasePassword == "" || c.OTPPepper == "" || c.JWTSecret == "" || c.UploadDir == "" || c.BackupDir == "" {
+		c.DatabaseName == "" || c.DatabaseUser == "" || c.DatabasePassword == "" || c.OTPPepper == "" || c.JWTSecret == "" || c.UploadDir == "" || c.BackupDir == "" || c.ZibalMerchant == "" || c.ZibalGatewayURL == "" {
 		return Config{}, fmt.Errorf("clubmax.env contains an empty required value")
+	}
+	if len(c.ZibalMerchant) > 200 {
+		return Config{}, fmt.Errorf("CLUBMAX_ZIBAL_MERCHANT is invalid")
+	}
+	if !validZibalGatewayURL(c.ZibalGatewayURL) {
+		return Config{}, fmt.Errorf("CLUBMAX_ZIBAL_GATEWAY_URL must be an official Zibal HTTPS endpoint")
 	}
 	var err error
 	if c.BackupHours, err = parseHours(required("CLUBMAX_BACKUP_HOURS")); err != nil {
@@ -59,6 +69,11 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("CLUBMAX_BACKUP_RETENTION must be a positive integer")
 	}
 	return c, nil
+}
+
+func validZibalGatewayURL(raw string) bool {
+	gatewayURL, err := url.Parse(raw)
+	return err == nil && gatewayURL.Scheme == "https" && gatewayURL.Host == "gateway.zibal.ir" && gatewayURL.User == nil && gatewayURL.RawQuery == "" && gatewayURL.Fragment == "" && (gatewayURL.Path == "" || gatewayURL.Path == "/")
 }
 
 func parseHours(value string) ([]int, error) {
@@ -87,6 +102,9 @@ func (c Config) FrontendOrigin() string {
 		return strings.TrimRight(c.FrontendURL, "/")
 	}
 	return "http://" + c.PublicHost + ":" + c.FrontendPort
+}
+func (c Config) PaymentCallbackURL() string {
+	return c.FrontendOrigin() + "/v1/payments/zibal/callback"
 }
 func (c Config) DatabaseURL() string {
 	connection := url.URL{

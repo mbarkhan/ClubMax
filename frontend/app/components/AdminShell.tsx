@@ -4,7 +4,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardSidebar from "./DashboardSidebar";
 
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 export type AdminUser = {
   id: string;
   role: "admin";

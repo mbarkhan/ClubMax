@@ -38,6 +38,8 @@ type GymRepository interface {
 	ListForAthlete(context.Context, string) ([]domain.Gym, error)
 	ListCatalog(context.Context, string, int, int) ([]domain.GymCatalogItem, error)
 	GetCatalogItem(context.Context, string, string, int, int) (*domain.GymCatalogItem, error)
+	ListPublicCatalog(context.Context) ([]domain.GymCatalogItem, error)
+	GetPublicCatalogItem(context.Context, string) (*domain.GymCatalogItem, error)
 	ListShowcase(context.Context) ([]domain.GymShowcaseItem, error)
 	CountByCoach(context.Context, string) (int, error)
 	Delete(context.Context, string) error
@@ -93,10 +95,19 @@ type WalletRepository interface {
 	CompleteDueWithdrawals(context.Context, time.Time) (int64, error)
 	ListLedger(context.Context, string, int, int) ([]domain.WalletEntry, error)
 	GetRegistrationFee(context.Context) (domain.RegistrationFeePolicy, error)
-	PayTuition(context.Context, *domain.TuitionPayment) error
-	PayMonthlyTuition(context.Context, string, string, int, int, string, time.Time) (*domain.MonthlyTuitionPayment, error)
 	ListAthletePayments(context.Context, string) ([]domain.AthletePayment, error)
 	ListGymAthletePayments(context.Context, string, string) ([]domain.AthletePayment, error)
+}
+
+type PaymentRepository interface {
+	CreateRegistrationPaymentOrder(context.Context, string, string, int, int, time.Time, time.Time) (*domain.PaymentOrder, error)
+	CreateMonthlyPaymentOrder(context.Context, string, string, int, int, time.Time, time.Time) (*domain.PaymentOrder, error)
+	SetPaymentOrderTrack(context.Context, string, int64, time.Time) error
+	ReopenPaymentOrder(context.Context, string, time.Time) error
+	FailPaymentOrder(context.Context, string, string, time.Time) error
+	GetPaymentOrder(context.Context, string) (*domain.PaymentOrder, error)
+	GetPaymentOrderByTrack(context.Context, int64) (*domain.PaymentOrder, error)
+	CompletePaymentOrder(context.Context, string, int64, int64, string, time.Time) (*domain.PaymentOrder, error)
 }
 
 type AdminRepository interface {

@@ -5,7 +5,7 @@ import DashboardSidebar from "../../components/DashboardSidebar";
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import "../../admin.css";
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 type User = {
   id: string;
   role: "admin" | "coach" | "athlete";

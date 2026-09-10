@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8081";
+const API = "";
 const SLIDE_DURATION = 4000;
 
 type ShowcaseGym = {
@@ -121,7 +121,7 @@ export default function GymShowcase({ locale }: { locale: string }) {
               </dd>
             </div>
           </dl>
-          <Link href={`/${locale}/signup`}>عضویت و مشاهده باشگاه‌ها</Link>
+          <Link href={`/${locale}/explore-gyms`}>مشاهده باشگاه‌ها</Link>
         </div>
       </article>
 

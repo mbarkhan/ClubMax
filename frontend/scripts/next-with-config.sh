@@ -10,7 +10,10 @@ set -a
 source "$PROJECT_DIR/clubmax.env"
 set +a
 
-export NEXT_PUBLIC_API_URL="http://$CLUBMAX_PUBLIC_HOST:$CLUBMAX_BACKEND_PORT"
+# Browser requests stay on the frontend origin. Next proxies them to the local
+# backend, so DHCP address changes and HTTPS mixed-content rules cannot break
+# API access.
+export CLUBMAX_INTERNAL_API_URL="http://127.0.0.1:$CLUBMAX_BACKEND_PORT"
 
 command="${1:?Next.js command is required}"
 shift

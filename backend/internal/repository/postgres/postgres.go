@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -85,7 +86,7 @@ func (s *Store) UpdatePassword(c context.Context, id, passwordHash string) error
 	return dbError(e)
 }
 func (s *Store) PromoteToAdmin(c context.Context, id, username, passwordHash string) error {
-	tag, e := s.DB.Exec(c, `UPDATE users SET role='admin',username=$2,password_hash=$3,phone=NULL,bank_iban=NULL,updated_at=now() WHERE id=$1`, id, username, passwordHash)
+	tag, e := s.DB.Exec(c, `UPDATE users SET role='admin',username=$2,password_hash=$3,phone=NULL,bank_iban=NULL,active=true,updated_at=now() WHERE id=$1`, id, username, passwordHash)
 	if e == nil && tag.RowsAffected() == 0 {
 		return domain.ErrNotFound
 	}
@@ -219,6 +220,27 @@ func (s *Store) GetCatalogItem(c context.Context, gymID, athleteID string, year,
 	v.OutstandingAmount = int64(v.UnpaidMonths) * v.TuitionAmount
 	v.MonthlyPaymentDue = v.UnpaidMonths > 0
 	return v, dbError(e)
+}
+func (s *Store) ListPublicCatalog(c context.Context) ([]domain.GymCatalogItem, error) {
+	rows, err := s.DB.Query(c, `SELECT `+gymCatalogCols+`,concat_ws(' ',u.first_name,u.last_name),false,CASE WHEN g.capacity=0 THEN NULL ELSE GREATEST(g.capacity-(SELECT count(*) FROM gym_athletes gc WHERE gc.gym_id=g.id),0) END,0 FROM gyms g JOIN users u ON u.id=g.coach_id WHERE u.active=true ORDER BY g.created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []domain.GymCatalogItem{}
+	for rows.Next() {
+		var item domain.GymCatalogItem
+		if err = rows.Scan(&item.ID, &item.CoachID, &item.Name, &item.Province, &item.City, &item.Address, &item.Phone, &item.Sport, &item.SportStyle, &item.ActiveWeekdays, &item.StartTime, &item.EndTime, &item.TuitionMode, &item.TuitionAmount, &item.Capacity, &item.CreatedAt, &item.UpdatedAt, &item.CoachName, &item.Joined, &item.CapacityRemaining, &item.UnpaidMonths); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+func (s *Store) GetPublicCatalogItem(c context.Context, gymID string) (*domain.GymCatalogItem, error) {
+	item := new(domain.GymCatalogItem)
+	err := s.DB.QueryRow(c, `SELECT `+gymCatalogCols+`,concat_ws(' ',u.first_name,u.last_name),false,CASE WHEN g.capacity=0 THEN NULL ELSE GREATEST(g.capacity-(SELECT count(*) FROM gym_athletes gc WHERE gc.gym_id=g.id),0) END,0 FROM gyms g JOIN users u ON u.id=g.coach_id WHERE g.id=$1 AND u.active=true`, gymID).Scan(&item.ID, &item.CoachID, &item.Name, &item.Province, &item.City, &item.Address, &item.Phone, &item.Sport, &item.SportStyle, &item.ActiveWeekdays, &item.StartTime, &item.EndTime, &item.TuitionMode, &item.TuitionAmount, &item.Capacity, &item.CreatedAt, &item.UpdatedAt, &item.CoachName, &item.Joined, &item.CapacityRemaining, &item.UnpaidMonths)
+	return item, dbError(err)
 }
 
 func (s *Store) ListShowcase(c context.Context) ([]domain.GymShowcaseItem, error) {
@@ -409,61 +431,113 @@ func (s *Store) GetRegistrationFee(c context.Context) (domain.RegistrationFeePol
 	e := s.DB.QueryRow(c, `SELECT fee_amount,updated_at FROM registration_fee_policy WHERE id=true`).Scan(&p.FeeAmount, &p.UpdatedAt)
 	return p, dbError(e)
 }
-func (s *Store) PayTuition(c context.Context, p *domain.TuitionPayment) error {
-	tx, e := s.DB.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if e != nil {
-		return e
-	}
-	defer tx.Rollback(c)
-	var role domain.Role
-	if e = tx.QueryRow(c, `SELECT role FROM users WHERE id=$1 FOR SHARE`, p.AthleteID).Scan(&role); e != nil {
-		return dbError(e)
-	}
-	if role != domain.RoleAthlete {
-		return domain.ErrForbidden
-	}
-	var capacity, registered int64
-	var tuitionMode domain.TuitionMode
-	if e = tx.QueryRow(c, `SELECT coach_id,tuition_amount,capacity,tuition_mode FROM gyms WHERE id=$1 FOR UPDATE`, p.GymID).Scan(&p.CoachID, &p.Tuition, &capacity, &tuitionMode); e != nil {
-		return dbError(e)
-	}
-	if e = tx.QueryRow(c, `SELECT count(*) FROM gym_athletes WHERE gym_id=$1`, p.GymID).Scan(&registered); e != nil {
-		return e
-	}
-	if capacity > 0 && registered >= capacity {
-		return domain.ErrGymFull
-	}
-	if e = tx.QueryRow(c, `SELECT fee_amount FROM registration_fee_policy WHERE id=true FOR SHARE`).Scan(&p.PlatformFee); e != nil {
-		return dbError(e)
-	}
-	p.Total = p.Tuition + p.PlatformFee
-	var billingYear, billingMonth any
-	if tuitionMode == domain.TuitionMonthly {
-		billingYear, billingMonth = p.BillingYear, p.BillingMonth
-	}
-	if _, e = tx.Exec(c, `INSERT INTO tuition_payments(id,athlete_id,gym_id,coach_id,tuition_amount,platform_fee,total_amount,status,tracking_id,billing_year,billing_month,payment_kind,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, p.ID, p.AthleteID, p.GymID, p.CoachID, p.Tuition, p.PlatformFee, p.Total, p.Status, p.TrackingID, billingYear, billingMonth, p.PaymentKind, p.CreatedAt); e != nil {
-		return dbError(e)
-	}
-	if _, e = tx.Exec(c, `INSERT INTO gym_athletes(gym_id,athlete_id,billing_start_year,billing_start_month,registered_at) VALUES($1,$2,$3,$4,$5)`, p.GymID, p.AthleteID, p.BillingYear, p.BillingMonth, p.CreatedAt); e != nil {
-		return dbError(e)
-	}
-	if p.Tuition > 0 {
-		if _, e = tx.Exec(c, `INSERT INTO wallet_entries(id,coach_id,entry_type,amount,reference_type,reference_id,description) VALUES(gen_random_uuid(),$1,$2,$3,'tuition_payment',$4,'athlete tuition payment')`, p.CoachID, domain.LedgerTuition, p.Tuition, p.ID); e != nil {
-			return dbError(e)
-		}
-	}
-	return tx.Commit(c)
+
+const paymentOrderCols = `id,athlete_id,gym_id,kind,tuition_amount,platform_fee,total_amount,billing_year,billing_month,status,zibal_track_id,zibal_ref_number,failure_reason,expires_at,completed_at,created_at,updated_at`
+
+func scanPaymentOrder(row pgx.Row) (*domain.PaymentOrder, error) {
+	v := new(domain.PaymentOrder)
+	e := row.Scan(&v.ID, &v.AthleteID, &v.GymID, &v.Kind, &v.Tuition, &v.PlatformFee, &v.Total, &v.BillingYear, &v.BillingMonth, &v.Status, &v.TrackID, &v.RefNumber, &v.Failure, &v.ExpiresAt, &v.CompletedAt, &v.CreatedAt, &v.UpdatedAt)
+	return v, dbError(e)
 }
-func (s *Store) PayMonthlyTuition(c context.Context, athleteID, gymID string, currentYear, currentMonth int, tracking string, createdAt time.Time) (*domain.MonthlyTuitionPayment, error) {
+
+func pendingPaymentOrder(c context.Context, tx pgx.Tx, athleteID, gymID string) (*domain.PaymentOrder, error) {
+	v, err := scanPaymentOrder(tx.QueryRow(c, `SELECT `+paymentOrderCols+` FROM payment_orders WHERE athlete_id=$1 AND gym_id=$2 AND status='pending' ORDER BY created_at DESC LIMIT 1 FOR UPDATE`, athleteID, gymID))
+	if errors.Is(err, domain.ErrNotFound) {
+		return nil, nil
+	}
+	return v, err
+}
+
+func clearStaleCreatedPaymentOrders(c context.Context, tx pgx.Tx, athleteID, gymID string, now time.Time) error {
+	_, err := tx.Exec(c, `UPDATE payment_orders SET status='failed',failure_reason='payment initialization timed out',updated_at=$3 WHERE athlete_id=$1 AND gym_id=$2 AND status='created' AND updated_at < $3-interval '2 minutes'`, athleteID, gymID, now)
+	return dbError(err)
+}
+
+func (s *Store) CreateRegistrationPaymentOrder(c context.Context, athleteID, gymID string, year, month int, now, expires time.Time) (*domain.PaymentOrder, error) {
 	tx, e := s.DB.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if e != nil {
 		return nil, e
 	}
 	defer tx.Rollback(c)
-	var coachID string
+	var role domain.Role
+	if e = tx.QueryRow(c, `SELECT role FROM users WHERE id=$1 FOR SHARE`, athleteID).Scan(&role); e != nil {
+		return nil, dbError(e)
+	}
+	if role != domain.RoleAthlete {
+		return nil, domain.ErrForbidden
+	}
+	var tuition, capacity int64
+	if e = tx.QueryRow(c, `SELECT g.tuition_amount,g.capacity FROM gyms g JOIN users coach ON coach.id=g.coach_id AND coach.active=true WHERE g.id=$1 FOR UPDATE OF g`, gymID).Scan(&tuition, &capacity); e != nil {
+		return nil, dbError(e)
+	}
+	if e = clearStaleCreatedPaymentOrders(c, tx, athleteID, gymID, now); e != nil {
+		return nil, e
+	}
+	var alreadyJoined bool
+	if e = tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM gym_athletes WHERE gym_id=$1 AND athlete_id=$2)`, gymID, athleteID).Scan(&alreadyJoined); e != nil {
+		return nil, e
+	}
+	if alreadyJoined {
+		return nil, domain.ErrConflict
+	}
+	if existing, err := pendingPaymentOrder(c, tx, athleteID, gymID); err != nil {
+		return nil, err
+	} else if existing != nil {
+		if err = tx.Commit(c); err != nil {
+			return nil, dbError(err)
+		}
+		return existing, nil
+	}
+	var creating bool
+	if e = tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM payment_orders WHERE athlete_id=$1 AND gym_id=$2 AND status='created')`, athleteID, gymID).Scan(&creating); e != nil {
+		return nil, e
+	}
+	if creating {
+		return nil, domain.ErrConflict
+	}
+	var registered, reserved int64
+	if e = tx.QueryRow(c, `SELECT count(*) FROM gym_athletes WHERE gym_id=$1`, gymID).Scan(&registered); e != nil {
+		return nil, e
+	}
+	if e = tx.QueryRow(c, `SELECT count(*) FROM payment_orders WHERE gym_id=$1 AND kind='registration' AND status IN ('created','pending') AND expires_at>=$2`, gymID, now).Scan(&reserved); e != nil {
+		return nil, e
+	}
+	if capacity > 0 && registered+reserved >= capacity {
+		return nil, domain.ErrGymFull
+	}
+	var fee int64
+	if e = tx.QueryRow(c, `SELECT fee_amount FROM registration_fee_policy WHERE id=true FOR SHARE`).Scan(&fee); e != nil {
+		return nil, dbError(e)
+	}
+	if tuition > math.MaxInt64-fee || tuition+fee <= 1000 {
+		return nil, domain.ErrPaymentAmount
+	}
+	v := &domain.PaymentOrder{ID: uuid.NewString(), AthleteID: athleteID, GymID: gymID, Kind: "registration", Tuition: tuition, PlatformFee: fee, Total: tuition + fee, BillingYear: year, BillingMonth: month, Status: domain.PaymentOrderCreated, ExpiresAt: expires, CreatedAt: now, UpdatedAt: now}
+	if _, e = tx.Exec(c, `INSERT INTO payment_orders(id,athlete_id,gym_id,kind,tuition_amount,platform_fee,total_amount,billing_year,billing_month,status,expires_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, v.ID, v.AthleteID, v.GymID, v.Kind, v.Tuition, v.PlatformFee, v.Total, v.BillingYear, v.BillingMonth, v.Status, v.ExpiresAt, v.CreatedAt, v.UpdatedAt); e != nil {
+		return nil, dbError(e)
+	}
+	if e = tx.Commit(c); e != nil {
+		return nil, dbError(e)
+	}
+	return v, nil
+}
+
+func (s *Store) CreateMonthlyPaymentOrder(c context.Context, athleteID, gymID string, currentYear, currentMonth int, now, expires time.Time) (*domain.PaymentOrder, error) {
+	tx, e := s.DB.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if e != nil {
+		return nil, e
+	}
+	defer tx.Rollback(c)
+	var role domain.Role
+	if e = tx.QueryRow(c, `SELECT role FROM users WHERE id=$1 FOR SHARE`, athleteID).Scan(&role); e != nil {
+		return nil, dbError(e)
+	}
+	if role != domain.RoleAthlete {
+		return nil, domain.ErrForbidden
+	}
 	var tuition int64
 	var mode domain.TuitionMode
-	if e = tx.QueryRow(c, `SELECT coach_id,tuition_amount,tuition_mode FROM gyms WHERE id=$1 FOR UPDATE`, gymID).Scan(&coachID, &tuition, &mode); e != nil {
+	if e = tx.QueryRow(c, `SELECT g.tuition_amount,g.tuition_mode FROM gyms g JOIN users coach ON coach.id=g.coach_id AND coach.active=true WHERE g.id=$1 FOR UPDATE OF g`, gymID).Scan(&tuition, &mode); e != nil {
 		return nil, dbError(e)
 	}
 	if mode != domain.TuitionMonthly {
@@ -473,57 +547,189 @@ func (s *Store) PayMonthlyTuition(c context.Context, athleteID, gymID string, cu
 	if e = tx.QueryRow(c, `SELECT billing_start_year,billing_start_month FROM gym_athletes WHERE gym_id=$1 AND athlete_id=$2 FOR UPDATE`, gymID, athleteID).Scan(&startYear, &startMonth); e != nil {
 		return nil, dbError(e)
 	}
-	rows, e := tx.Query(c, `SELECT billing_year,billing_month FROM tuition_payments WHERE gym_id=$1 AND athlete_id=$2 AND billing_year IS NOT NULL`, gymID, athleteID)
+	if e = clearStaleCreatedPaymentOrders(c, tx, athleteID, gymID, now); e != nil {
+		return nil, e
+	}
+	if existing, err := pendingPaymentOrder(c, tx, athleteID, gymID); err != nil {
+		return nil, err
+	} else if existing != nil {
+		if err = tx.Commit(c); err != nil {
+			return nil, dbError(err)
+		}
+		return existing, nil
+	}
+	var creating bool
+	if e = tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM payment_orders WHERE athlete_id=$1 AND gym_id=$2 AND status='created')`, athleteID, gymID).Scan(&creating); e != nil {
+		return nil, e
+	}
+	if creating {
+		return nil, domain.ErrConflict
+	}
+	rows, e := tx.Query(c, `SELECT billing_year,billing_month FROM tuition_payments WHERE gym_id=$1 AND athlete_id=$2 AND status='succeeded' AND billing_year IS NOT NULL`, gymID, athleteID)
 	if e != nil {
 		return nil, e
 	}
 	paid := map[int]bool{}
 	for rows.Next() {
-		var year, month int
-		if e = rows.Scan(&year, &month); e != nil {
+		var y, m int
+		if e = rows.Scan(&y, &m); e != nil {
 			rows.Close()
 			return nil, e
 		}
-		paid[year*12+month] = true
+		paid[y*12+m] = true
 	}
 	if e = rows.Err(); e != nil {
 		rows.Close()
 		return nil, e
 	}
 	rows.Close()
-	start, end := startYear*12+startMonth, currentYear*12+currentMonth
-	result := &domain.MonthlyTuitionPayment{}
-	for serial := start; serial <= end; serial++ {
+	v := &domain.PaymentOrder{ID: uuid.NewString(), AthleteID: athleteID, GymID: gymID, Kind: "monthly", BillingYear: currentYear, BillingMonth: currentMonth, Status: domain.PaymentOrderCreated, ExpiresAt: expires, CreatedAt: now, UpdatedAt: now}
+	months := []domain.PaymentOrderMonth{}
+	for serial := startYear*12 + startMonth; serial <= currentYear*12+currentMonth; serial++ {
 		if paid[serial] {
 			continue
 		}
-		year, month := (serial-1)/12, (serial-1)%12+1
-		paymentID := uuid.NewString()
-		monthTracking := fmt.Sprintf("%s-%04d%02d", tracking, year, month)
-		if _, e = tx.Exec(c, `INSERT INTO tuition_payments(id,athlete_id,gym_id,coach_id,tuition_amount,platform_fee,total_amount,status,tracking_id,billing_year,billing_month,payment_kind,created_at) VALUES($1,$2,$3,$4,$5,0,$5,'succeeded',$6,$7,$8,'monthly',$9)`, paymentID, athleteID, gymID, coachID, tuition, monthTracking, year, month, createdAt); e != nil {
+		y, m := (serial-1)/12, (serial-1)%12+1
+		if tuition > 0 && v.Tuition > math.MaxInt64-tuition {
+			return nil, domain.ErrPaymentAmount
+		}
+		months = append(months, domain.PaymentOrderMonth{BillingYear: y, BillingMonth: m, Amount: tuition})
+		v.Tuition += tuition
+	}
+	if len(months) == 0 {
+		return nil, domain.ErrConflict
+	}
+	if v.Tuition <= 1000 {
+		return nil, domain.ErrPaymentAmount
+	}
+	v.Total = v.Tuition
+	if _, e = tx.Exec(c, `INSERT INTO payment_orders(id,athlete_id,gym_id,kind,tuition_amount,platform_fee,total_amount,billing_year,billing_month,status,expires_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, v.ID, v.AthleteID, v.GymID, v.Kind, v.Tuition, 0, v.Total, v.BillingYear, v.BillingMonth, v.Status, v.ExpiresAt, v.CreatedAt, v.UpdatedAt); e != nil {
+		return nil, dbError(e)
+	}
+	for _, month := range months {
+		if _, e = tx.Exec(c, `INSERT INTO payment_order_months(order_id,billing_year,billing_month,amount) VALUES($1,$2,$3,$4)`, v.ID, month.BillingYear, month.BillingMonth, month.Amount); e != nil {
 			return nil, dbError(e)
 		}
-		if tuition > 0 {
-			description := fmt.Sprintf("monthly tuition %04d/%02d", year, month)
-			if _, e = tx.Exec(c, `INSERT INTO wallet_entries(id,coach_id,entry_type,amount,reference_type,reference_id,description) VALUES(gen_random_uuid(),$1,$2,$3,'tuition_payment',$4,$5)`, coachID, domain.LedgerTuition, tuition, paymentID, description); e != nil {
-				return nil, dbError(e)
-			}
-		}
-		if result.PaidMonths == 0 {
-			result.FromYear, result.FromMonth = year, month
-			result.TrackingID = monthTracking
-		}
-		result.ToYear, result.ToMonth = year, month
-		result.PaidMonths++
-		result.PaidAmount += tuition
-	}
-	if result.PaidMonths == 0 {
-		return nil, domain.ErrConflict
 	}
 	if e = tx.Commit(c); e != nil {
 		return nil, dbError(e)
 	}
-	return result, nil
+	return v, nil
+}
+
+func (s *Store) SetPaymentOrderTrack(c context.Context, id string, trackID int64, now time.Time) error {
+	tag, e := s.DB.Exec(c, `UPDATE payment_orders SET zibal_track_id=$2,status='pending',updated_at=$3 WHERE id=$1 AND status='created'`, id, trackID, now)
+	if e == nil && tag.RowsAffected() == 0 {
+		return domain.ErrInvalidState
+	}
+	return dbError(e)
+}
+func (s *Store) ReopenPaymentOrder(c context.Context, id string, now time.Time) error {
+	tag, e := s.DB.Exec(c, `UPDATE payment_orders SET status='pending',failure_reason=NULL,updated_at=$2 WHERE id=$1 AND status='failed' AND zibal_track_id IS NOT NULL`, id, now)
+	if e == nil && tag.RowsAffected() == 0 {
+		return domain.ErrInvalidState
+	}
+	return dbError(e)
+}
+func (s *Store) FailPaymentOrder(c context.Context, id, reason string, now time.Time) error {
+	_, e := s.DB.Exec(c, `UPDATE payment_orders SET status='failed',failure_reason=$2,updated_at=$3 WHERE id=$1 AND status<>'succeeded'`, id, reason, now)
+	return dbError(e)
+}
+func (s *Store) GetPaymentOrder(c context.Context, id string) (*domain.PaymentOrder, error) {
+	return scanPaymentOrder(s.DB.QueryRow(c, `SELECT `+paymentOrderCols+` FROM payment_orders WHERE id=$1`, id))
+}
+func (s *Store) GetPaymentOrderByTrack(c context.Context, trackID int64) (*domain.PaymentOrder, error) {
+	return scanPaymentOrder(s.DB.QueryRow(c, `SELECT `+paymentOrderCols+` FROM payment_orders WHERE zibal_track_id=$1`, trackID))
+}
+func (s *Store) CompletePaymentOrder(c context.Context, id string, trackID, amount int64, refNumber string, completedAt time.Time) (*domain.PaymentOrder, error) {
+	tx, e := s.DB.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if e != nil {
+		return nil, e
+	}
+	defer tx.Rollback(c)
+	v, e := scanPaymentOrder(tx.QueryRow(c, `SELECT `+paymentOrderCols+` FROM payment_orders WHERE id=$1 FOR UPDATE`, id))
+	if e != nil {
+		return nil, e
+	}
+	if v.Status == domain.PaymentOrderSucceeded {
+		return v, tx.Commit(c)
+	}
+	if (v.Status != domain.PaymentOrderPending && v.Status != domain.PaymentOrderFailed) || v.TrackID == nil || *v.TrackID != trackID || v.Total != amount || refNumber == "" {
+		return nil, domain.ErrPaymentFailed
+	}
+	var coachID string
+	var tuitionMode domain.TuitionMode
+	if e = tx.QueryRow(c, `SELECT coach_id,tuition_mode FROM gyms WHERE id=$1 FOR UPDATE`, v.GymID).Scan(&coachID, &tuitionMode); e != nil {
+		return nil, dbError(e)
+	}
+	if v.Kind == "registration" {
+		billingYear, billingMonth := any(nil), any(nil)
+		if tuitionMode == domain.TuitionMonthly {
+			billingYear, billingMonth = v.BillingYear, v.BillingMonth
+		}
+		tracking := fmt.Sprintf("ZIBAL-%d", trackID)
+		if _, e = tx.Exec(c, `INSERT INTO tuition_payments(id,athlete_id,gym_id,coach_id,tuition_amount,platform_fee,total_amount,status,tracking_id,billing_year,billing_month,payment_kind,created_at,payment_order_id) VALUES($1,$2,$3,$4,$5,$6,$7,'succeeded',$8,$9,$10,'registration',$11,$1)`, v.ID, v.AthleteID, v.GymID, coachID, v.Tuition, v.PlatformFee, v.Total, tracking, billingYear, billingMonth, completedAt); e != nil {
+			return nil, dbError(e)
+		}
+		if _, e = tx.Exec(c, `INSERT INTO gym_athletes(gym_id,athlete_id,billing_start_year,billing_start_month,registered_at) VALUES($1,$2,$3,$4,$5)`, v.GymID, v.AthleteID, v.BillingYear, v.BillingMonth, completedAt); e != nil {
+			return nil, dbError(e)
+		}
+		if v.Tuition > 0 {
+			if _, e = tx.Exec(c, `INSERT INTO wallet_entries(id,coach_id,entry_type,amount,reference_type,reference_id,description) VALUES(gen_random_uuid(),$1,$2,$3,'tuition_payment',$4,'athlete tuition payment')`, coachID, domain.LedgerTuition, v.Tuition, v.ID); e != nil {
+				return nil, dbError(e)
+			}
+		}
+	} else {
+		rows, e := tx.Query(c, `SELECT billing_year,billing_month,amount FROM payment_order_months WHERE order_id=$1 ORDER BY billing_year,billing_month FOR UPDATE`, v.ID)
+		if e != nil {
+			return nil, e
+		}
+		months := []domain.PaymentOrderMonth{}
+		for rows.Next() {
+			var m domain.PaymentOrderMonth
+			if e = rows.Scan(&m.BillingYear, &m.BillingMonth, &m.Amount); e != nil {
+				rows.Close()
+				return nil, e
+			}
+			months = append(months, m)
+		}
+		if e = rows.Err(); e != nil {
+			rows.Close()
+			return nil, e
+		}
+		rows.Close()
+		if len(months) == 0 {
+			return nil, domain.ErrInvalidState
+		}
+		for _, m := range months {
+			paymentID := uuid.NewString()
+			tracking := fmt.Sprintf("ZIBAL-%d-%04d%02d", trackID, m.BillingYear, m.BillingMonth)
+			if _, e = tx.Exec(c, `INSERT INTO tuition_payments(id,athlete_id,gym_id,coach_id,tuition_amount,platform_fee,total_amount,status,tracking_id,billing_year,billing_month,payment_kind,created_at,payment_order_id) VALUES($1,$2,$3,$4,$5,0,$5,'succeeded',$6,$7,$8,'monthly',$9,$10)`, paymentID, v.AthleteID, v.GymID, coachID, m.Amount, tracking, m.BillingYear, m.BillingMonth, completedAt, v.ID); e != nil {
+				return nil, dbError(e)
+			}
+			if m.Amount > 0 {
+				desc := fmt.Sprintf("monthly tuition %04d/%02d", m.BillingYear, m.BillingMonth)
+				if _, e = tx.Exec(c, `INSERT INTO wallet_entries(id,coach_id,entry_type,amount,reference_type,reference_id,description) VALUES(gen_random_uuid(),$1,$2,$3,'tuition_payment',$4,$5)`, coachID, domain.LedgerTuition, m.Amount, paymentID, desc); e != nil {
+					return nil, dbError(e)
+				}
+			}
+		}
+	}
+	if _, e = tx.Exec(c, `UPDATE payment_orders SET status='succeeded',zibal_ref_number=$2,failure_reason=NULL,completed_at=$3,updated_at=$3 WHERE id=$1`, v.ID, refNumber, completedAt); e != nil {
+		return nil, dbError(e)
+	}
+	v.Status = domain.PaymentOrderSucceeded
+	v.RefNumber = nil
+	if refNumber != "" {
+		v.RefNumber = &refNumber
+	}
+	v.Failure = nil
+	v.CompletedAt = &completedAt
+	v.UpdatedAt = completedAt
+	if e = tx.Commit(c); e != nil {
+		return nil, dbError(e)
+	}
+	return v, nil
 }
 func (s *Store) ListAthletePayments(c context.Context, athleteID string) ([]domain.AthletePayment, error) {
 	rows, e := s.DB.Query(c, `SELECT tp.id,tp.athlete_id,tp.gym_id,tp.coach_id,tp.tuition_amount,tp.platform_fee,tp.total_amount,tp.status,tp.tracking_id,COALESCE(tp.billing_year,0),COALESCE(tp.billing_month,0),tp.payment_kind,tp.created_at,g.name,concat_ws(' ',u.first_name,u.last_name) FROM tuition_payments tp JOIN gyms g ON g.id=tp.gym_id JOIN users u ON u.id=tp.coach_id WHERE tp.athlete_id=$1 ORDER BY tp.created_at DESC,tp.billing_year DESC NULLS LAST,tp.billing_month DESC NULLS LAST`, athleteID)

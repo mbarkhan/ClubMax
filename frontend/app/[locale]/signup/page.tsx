@@ -9,7 +9,7 @@ import FileField from "../../components/FileField";
 import PasswordField from "../../components/PasswordField";
 import IranianIBANInput from "../../components/IranianIBANInput";
 import "../../auth.css";
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 const education = [
     ["below_diploma", "زیردیپلم"],
     ["diploma", "دیپلم"],

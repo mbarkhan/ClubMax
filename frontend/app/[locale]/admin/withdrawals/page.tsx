@@ -3,7 +3,7 @@ import Link from "next/link";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import AdminShell from "../../../components/AdminShell";
 import "../../../admin.css";
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 const money = (n: number) => `${Number(n).toLocaleString("fa-IR")} ریال`;
 type Status = "under_review" | "queued" | "completed" | "rejected";
 type Withdrawal = {

@@ -53,7 +53,7 @@ ClubMax/
    chmod 600 clubmax.env
    ```
 
-2. آدرس سرور، پورت‌ها و Secretهای Production را در آن ثبت کنید. Compose آدرس‌های عمومی را از `CLUBMAX_PUBLIC_HOST` و پورت‌ها می‌سازد؛ در صورت استفاده از دامنه یا HTTPS می‌توان `CLUBMAX_FRONTEND_ORIGIN` و `CLUBMAX_PUBLIC_API_URL` را نیز صریحاً تعیین کرد.
+2. آدرس سرور، پورت‌ها و Secretهای Production را در آن ثبت کنید. درخواست‌های مرورگر از همان مبدأ رابط کاربری به بک‌اند پروکسی می‌شوند و به IP یا پورت جداگانه API وابسته نیستند.
 3. imageها را بسازید و سرویس‌ها را اجرا کنید:
 
    ```bash
@@ -82,8 +82,21 @@ ClubMax/
 CLUBMAX_BIND_IP=127.0.0.1
 CLUBMAX_PUBLIC_HOST=www.clubmax.ir
 CLUBMAX_FRONTEND_ORIGIN=https://www.clubmax.ir
-CLUBMAX_PUBLIC_API_URL=https://www.clubmax.ir
 ```
+
+### درگاه پرداخت زیبال
+
+پرداخت ثبت‌نام و شهریه با زیبال انجام می‌شود. کد پذیرندگی را فقط در فایل
+`clubmax.env` سرور ثبت کنید و هرگز آن را در Git یا فرانت‌اند قرار ندهید:
+
+```dotenv
+CLUBMAX_ZIBAL_MERCHANT=کد_پذیرندگی_زیبال
+CLUBMAX_ZIBAL_GATEWAY_URL=https://gateway.zibal.ir
+```
+
+نشانی Callback که باید در پنل زیبال برای دامنه production تأیید شود:
+`https://www.clubmax.ir/v1/payments/zibal/callback`. پس از تغییر این مقادیر،
+بک‌اند را بازسازی و راه‌اندازی مجدد کنید.
 
 پس از نصب Caddy، پیکربندی را نصب و بارگذاری کنید:
 

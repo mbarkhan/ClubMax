@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import SiteLogo from "../../components/SiteLogo";
 import GymCover from "../../components/GymCover";
 import "../../catalog.css";
 
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 const days = ["شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه"];
 const normalizeSearch = (value: string) =>
   value.trim().toLocaleLowerCase("fa").replace(/ي/g, "ی").replace(/ك/g, "ک");
@@ -31,8 +31,7 @@ type Gym = {
 };
 
 export default function ExploreGyms() {
-  const { locale } = useParams<{ locale: string }>(),
-    router = useRouter();
+  const { locale } = useParams<{ locale: string }>();
   const [items, setItems] = useState<Gym[]>([]),
     [error, setError] = useState(""),
     [filters, setFilters] = useState({
@@ -45,13 +44,8 @@ export default function ExploreGyms() {
       mode: "",
     });
   useEffect(() => {
-    const token = localStorage.getItem("clubmax_access_token") || "";
-    fetch(`${API}/v1/gyms/catalog`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API}/v1/public/gyms/catalog`)
       .then(async (response) => {
-        if (response.status === 401 || response.status === 403) {
-          router.replace(`/${locale}/login`);
-          return;
-        }
         const data = await response.json();
         if (!response.ok) throw new Error(data.message);
         setItems(data || []);
@@ -59,7 +53,7 @@ export default function ExploreGyms() {
       .catch((reason) =>
         setError(reason instanceof Error ? reason.message : "دریافت باشگاه‌ها انجام نشد.")
       );
-  }, [locale, router]);
+  }, []);
   const values = (key: keyof Gym) => [
     ...new Set(items.map((item) => String(item[key] ?? "")).filter(Boolean)),
   ];
@@ -183,11 +177,7 @@ export default function ExploreGyms() {
                 className={gym.capacity_remaining === 0 && !gym.joined ? "disabled-link" : ""}
                 href={`/${locale}/explore-gyms/${gym.id}`}
               >
-                {gym.joined
-                  ? "مشاهده عضویت"
-                  : gym.capacity_remaining === 0
-                    ? "تکمیل ظرفیت"
-                    : "مشاهده و ثبت‌نام"}
+                {gym.capacity_remaining === 0 ? "تکمیل ظرفیت" : "مشاهده مشخصات"}
               </Link>
             </div>
           </article>

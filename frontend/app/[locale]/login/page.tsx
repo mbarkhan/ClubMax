@@ -7,7 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import PasswordField from "../../components/PasswordField";
 import "../../auth.css";
 
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 export default function Login() {
   const { locale } = useParams<{ locale: string }>(),
     router = useRouter();

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import DashboardSidebar from "../../components/DashboardSidebar";
 import "../../admin.css";
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 const money = (v: number) => `${Math.abs(Number(v)).toLocaleString("fa-IR")} ریال`;
 type User = {
   id: string;

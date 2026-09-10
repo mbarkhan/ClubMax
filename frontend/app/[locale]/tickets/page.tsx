@@ -6,7 +6,7 @@ import DashboardSidebar from "../../components/DashboardSidebar";
 import "../../admin.css";
 import "../../tickets.css";
 
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 type Role = "admin" | "coach" | "athlete";
 type User = {
   id: string;

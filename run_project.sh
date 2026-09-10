@@ -119,4 +119,4 @@ if ! adopt_running_service frontend "$CLUBMAX_FRONTEND_PORT" "http://$CLUBMAX_SE
 fi
 
 echo "ClubMax is available locally at http://127.0.0.1:$CLUBMAX_FRONTEND_PORT."
-echo "Local-network address: http://$CLUBMAX_PUBLIC_HOST:$CLUBMAX_FRONTEND_PORT (API: http://$CLUBMAX_PUBLIC_HOST:$CLUBMAX_BACKEND_PORT)."
+echo "Local-network address: http://$CLUBMAX_PUBLIC_HOST:$CLUBMAX_FRONTEND_PORT (API is proxied through the same address)."

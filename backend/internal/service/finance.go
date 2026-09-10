@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 	"errors"
-	"github.com/google/uuid"
 	"github.com/clubmax/clubmax/internal/domain"
 	"github.com/clubmax/clubmax/internal/repository"
+	"github.com/google/uuid"
 	"strings"
 	"time"
 )
@@ -13,14 +13,16 @@ import (
 const defaultWithdrawalFeeBPS int64 = 200 // 2.00%
 
 type FinanceService struct {
-	wallet repository.WalletRepository
-	users  repository.UserRepository
-	gyms   repository.GymRepository
-	now    func() time.Time
+	wallet   repository.WalletRepository
+	users    repository.UserRepository
+	gyms     repository.GymRepository
+	payments repository.PaymentRepository
+	gateway  PaymentGateway
+	now      func() time.Time
 }
 
-func NewFinanceService(w repository.WalletRepository, u repository.UserRepository, g repository.GymRepository) *FinanceService {
-	return &FinanceService{wallet: w, users: u, gyms: g, now: time.Now}
+func NewFinanceService(w repository.WalletRepository, u repository.UserRepository, g repository.GymRepository, p repository.PaymentRepository, gateway PaymentGateway) *FinanceService {
+	return &FinanceService{wallet: w, users: u, gyms: g, payments: p, gateway: gateway, now: time.Now}
 }
 
 func (s *FinanceService) RequestWithdrawal(ctx context.Context, coachID string, gross int64) (*domain.WithdrawalRequest, error) {
@@ -140,34 +142,126 @@ func (s *FinanceService) Ledger(ctx context.Context, coach string, limit, offset
 func (s *FinanceService) RegistrationFee(ctx context.Context) (domain.RegistrationFeePolicy, error) {
 	return s.wallet.GetRegistrationFee(ctx)
 }
-func (s *FinanceService) PayTuition(ctx context.Context, athleteID, gymID string) (*domain.TuitionPayment, error) {
-	u, e := s.users.GetByID(ctx, athleteID)
-	if e != nil {
-		return nil, e
+func (s *FinanceService) StartRegistrationPayment(ctx context.Context, athleteID, gymID, callbackURL string) (*domain.PaymentStart, error) {
+	athlete, err := s.users.GetByID(ctx, athleteID)
+	if err != nil {
+		return nil, err
 	}
-	if u.Role != domain.RoleAthlete {
+	if athlete.Role != domain.RoleAthlete {
 		return nil, domain.ErrForbidden
 	}
 	now := s.now()
 	year, month := persianYearMonth(now)
-	p := &domain.TuitionPayment{ID: uuid.NewString(), AthleteID: athleteID, GymID: gymID, Status: "succeeded", TrackingID: "TEST-" + strings.ToUpper(strings.ReplaceAll(uuid.NewString(), "-", "")[:16]), BillingYear: year, BillingMonth: month, PaymentKind: "registration", CreatedAt: now}
-	if e = s.wallet.PayTuition(ctx, p); e != nil {
-		return nil, e
+	order, err := s.payments.CreateRegistrationPaymentOrder(ctx, athleteID, gymID, year, month, now, now.Add(15*time.Minute))
+	if err != nil {
+		return nil, err
 	}
-	return p, nil
+	if order.Status == domain.PaymentOrderPending && order.TrackID != nil {
+		return &domain.PaymentStart{OrderID: order.ID, PaymentURL: s.gateway.StartURL(*order.TrackID)}, nil
+	}
+	mobile := ""
+	if athlete.Phone != nil {
+		mobile = *athlete.Phone
+	}
+	trackID, err := s.gateway.Request(ctx, order.Total, callbackURL, order.ID, "ClubMax registration payment", mobile)
+	if err != nil {
+		_ = s.payments.FailPaymentOrder(ctx, order.ID, "gateway request failed", s.now())
+		return nil, err
+	}
+	if err = s.payments.SetPaymentOrderTrack(ctx, order.ID, trackID, s.now()); err != nil {
+		_ = s.payments.FailPaymentOrder(ctx, order.ID, "gateway tracking setup failed", s.now())
+		return nil, err
+	}
+	return &domain.PaymentStart{OrderID: order.ID, PaymentURL: s.gateway.StartURL(trackID)}, nil
 }
-func (s *FinanceService) PayMonthlyTuition(ctx context.Context, athleteID, gymID string) (*domain.MonthlyTuitionPayment, error) {
-	u, e := s.users.GetByID(ctx, athleteID)
-	if e != nil {
-		return nil, e
+
+func (s *FinanceService) StartMonthlyPayment(ctx context.Context, athleteID, gymID, callbackURL string) (*domain.PaymentStart, error) {
+	athlete, err := s.users.GetByID(ctx, athleteID)
+	if err != nil {
+		return nil, err
 	}
-	if u.Role != domain.RoleAthlete {
+	if athlete.Role != domain.RoleAthlete {
 		return nil, domain.ErrForbidden
 	}
 	now := s.now()
 	year, month := persianYearMonth(now)
-	tracking := "TEST-" + strings.ToUpper(strings.ReplaceAll(uuid.NewString(), "-", "")[:16])
-	return s.wallet.PayMonthlyTuition(ctx, athleteID, gymID, year, month, tracking, now)
+	order, err := s.payments.CreateMonthlyPaymentOrder(ctx, athleteID, gymID, year, month, now, now.Add(15*time.Minute))
+	if err != nil {
+		return nil, err
+	}
+	if order.Status == domain.PaymentOrderPending && order.TrackID != nil {
+		return &domain.PaymentStart{OrderID: order.ID, PaymentURL: s.gateway.StartURL(*order.TrackID)}, nil
+	}
+	mobile := ""
+	if athlete.Phone != nil {
+		mobile = *athlete.Phone
+	}
+	trackID, err := s.gateway.Request(ctx, order.Total, callbackURL, order.ID, "ClubMax monthly tuition payment", mobile)
+	if err != nil {
+		_ = s.payments.FailPaymentOrder(ctx, order.ID, "gateway request failed", s.now())
+		return nil, err
+	}
+	if err = s.payments.SetPaymentOrderTrack(ctx, order.ID, trackID, s.now()); err != nil {
+		_ = s.payments.FailPaymentOrder(ctx, order.ID, "gateway tracking setup failed", s.now())
+		return nil, err
+	}
+	return &domain.PaymentStart{OrderID: order.ID, PaymentURL: s.gateway.StartURL(trackID)}, nil
+}
+
+func (s *FinanceService) VerifyZibalPayment(ctx context.Context, trackID int64) (*domain.PaymentOrder, error) {
+	order, err := s.payments.GetPaymentOrderByTrack(ctx, trackID)
+	if err != nil {
+		return nil, err
+	}
+	if order.Status == domain.PaymentOrderSucceeded {
+		return order, nil
+	}
+	verification, err := s.gateway.Verify(ctx, trackID)
+	if err != nil {
+		if errors.Is(err, domain.ErrPaymentFailed) {
+			_ = s.payments.FailPaymentOrder(ctx, order.ID, "zibal did not confirm payment", s.now())
+		}
+		return order, err
+	}
+	if order.Status == domain.PaymentOrderFailed {
+		if err = s.payments.ReopenPaymentOrder(ctx, order.ID, s.now()); err != nil {
+			return order, err
+		}
+		order.Status = domain.PaymentOrderPending
+		order.Failure = nil
+	}
+	completed, err := s.payments.CompletePaymentOrder(ctx, order.ID, trackID, verification.Amount, verification.RefNumber, s.now())
+	if err != nil {
+		// Zibal has already confirmed the charge. Keep the order retryable instead
+		// of falsely marking it failed when local fulfillment needs intervention.
+		return order, err
+	}
+	return completed, nil
+}
+
+func (s *FinanceService) VerifyAthletePayment(ctx context.Context, athleteID, id string) (*domain.PaymentOrder, error) {
+	order, err := s.PaymentOrder(ctx, athleteID, id)
+	if err != nil {
+		return nil, err
+	}
+	if order.Status == domain.PaymentOrderSucceeded {
+		return order, nil
+	}
+	if order.TrackID == nil {
+		return nil, domain.ErrInvalidState
+	}
+	return s.VerifyZibalPayment(ctx, *order.TrackID)
+}
+
+func (s *FinanceService) PaymentOrder(ctx context.Context, athleteID, id string) (*domain.PaymentOrder, error) {
+	order, err := s.payments.GetPaymentOrder(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if order.AthleteID != athleteID {
+		return nil, domain.ErrForbidden
+	}
+	return order, nil
 }
 func (s *FinanceService) AthletePayments(ctx context.Context, athleteID string) ([]domain.AthletePayment, error) {
 	u, e := s.users.GetByID(ctx, athleteID)

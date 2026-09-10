@@ -28,4 +28,7 @@ var (
 	ErrMessageRecipient   = errors.New("message recipient is not allowed")
 	ErrBackupInProgress   = errors.New("a backup is already in progress")
 	ErrInvalidBackup      = errors.New("invalid or incompatible backup archive")
+	ErrPaymentGateway     = errors.New("payment gateway is unavailable")
+	ErrPaymentFailed      = errors.New("payment was not confirmed")
+	ErrPaymentAmount      = errors.New("payment amount is outside gateway limits")
 )

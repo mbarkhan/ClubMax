@@ -414,7 +414,8 @@ func (s *UserService) Delete(ctx context.Context, id, actorID string) error {
 	return s.users.Delete(ctx, id)
 }
 func (s *UserService) CreateAdmin(ctx context.Context, name, username, password string) (*domain.User, error) {
-	if strings.TrimSpace(name) == "" || len(password) < 12 {
+	name, username = strings.TrimSpace(name), strings.TrimSpace(username)
+	if name == "" || username == "" || len(password) < 12 {
 		return nil, domain.ErrInvalid
 	}
 	h, e := hashPassword(password)
@@ -429,6 +430,7 @@ func (s *UserService) CreateAdmin(ctx context.Context, name, username, password 
 	return u, s.users.Create(ctx, u)
 }
 func (s *UserService) AuthenticateAdmin(ctx context.Context, username, password string) (*domain.User, error) {
+	username = strings.TrimSpace(username)
 	u, e := s.users.GetByUsername(ctx, username)
 	if e != nil || !u.Active || u.Role != domain.RoleAdmin || u.PasswordHash == nil || !comparePassword(*u.PasswordHash, password) {
 		return nil, domain.ErrInvalidCredentials

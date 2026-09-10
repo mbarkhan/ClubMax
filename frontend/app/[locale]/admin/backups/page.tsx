@@ -4,7 +4,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import AdminShell from "../../../components/AdminShell";
 import "../../../admin.css";
 
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 
 type BackupFile = { name: string; size: number; created_at: string };
 type BackupStatus = {

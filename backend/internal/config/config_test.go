@@ -20,3 +20,22 @@ func TestParseBackupHoursRejectsInvalidHour(t *testing.T) {
 		t.Fatal("parseHours() accepted hour 24")
 	}
 }
+
+func TestValidZibalGatewayURL(t *testing.T) {
+	for _, test := range []struct {
+		url   string
+		valid bool
+	}{
+		{url: "https://gateway.zibal.ir", valid: true},
+		{url: "https://gateway.zibal.ir/", valid: true},
+		{url: "http://gateway.zibal.ir", valid: false},
+		{url: "https://gateway.zibal.ir.evil.example", valid: false},
+		{url: "https://gateway.zibal.ir@evil.example", valid: false},
+		{url: "https://gateway.zibal.ir/v1", valid: false},
+		{url: "https://gateway.zibal.ir?redirect=evil", valid: false},
+	} {
+		if got := validZibalGatewayURL(test.url); got != test.valid {
+			t.Errorf("validZibalGatewayURL(%q) = %v, want %v", test.url, got, test.valid)
+		}
+	}
+}

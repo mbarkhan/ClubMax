@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 
 type SignedInUser = {
   first_name: string;

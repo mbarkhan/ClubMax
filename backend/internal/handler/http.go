@@ -23,24 +23,28 @@ import (
 )
 
 type API struct {
-	users     *service.UserService
-	gyms      *service.GymService
-	finance   *service.FinanceService
-	messages  *service.MessageService
-	tickets   *service.TicketService
-	admin     *service.AdminService
-	backups   *service.BackupService
-	jwtKey    []byte
-	uploadDir string
+	users              *service.UserService
+	gyms               *service.GymService
+	finance            *service.FinanceService
+	messages           *service.MessageService
+	tickets            *service.TicketService
+	admin              *service.AdminService
+	backups            *service.BackupService
+	jwtKey             []byte
+	uploadDir          string
+	frontendOrigin     string
+	paymentCallbackURL string
 }
 
-func New(u *service.UserService, c *service.GymService, f *service.FinanceService, m *service.MessageService, tickets *service.TicketService, admin *service.AdminService, backups *service.BackupService, jwtSecret, frontendOrigin, uploadDir string) http.Handler {
-	a := &API{users: u, gyms: c, finance: f, messages: m, tickets: tickets, admin: admin, backups: backups, jwtKey: []byte(jwtSecret), uploadDir: uploadDir}
+func New(u *service.UserService, c *service.GymService, f *service.FinanceService, m *service.MessageService, tickets *service.TicketService, admin *service.AdminService, backups *service.BackupService, jwtSecret, frontendOrigin, paymentCallbackURL, uploadDir string) http.Handler {
+	a := &API{users: u, gyms: c, finance: f, messages: m, tickets: tickets, admin: admin, backups: backups, jwtKey: []byte(jwtSecret), uploadDir: uploadDir, frontendOrigin: frontendOrigin, paymentCallbackURL: paymentCallbackURL}
 	r := chi.NewRouter()
 	r.Use(recoverer, securityHeaders, locale, cors(frontendOrigin))
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) { write(w, 200, map[string]string{"status": "ok"}) })
 	r.Handle("/media/*", http.StripPrefix("/media/", http.FileServer(http.Dir(uploadDir))))
 	r.Route("/v1", func(r chi.Router) {
+		r.Get("/payments/zibal/callback", a.zibalCallback)
+		r.Post("/payments/zibal/callback", a.zibalCallback)
 		r.Get("/meta/locales", func(w http.ResponseWriter, _ *http.Request) {
 			write(w, 200, map[string]any{"default": "fa", "supported": []string{"fa", "en"}, "direction": map[string]string{"fa": "rtl", "en": "ltr"}})
 		})
@@ -60,6 +64,9 @@ func New(u *service.UserService, c *service.GymService, f *service.FinanceServic
 		r.With(rateLimit(10, time.Minute)).Post("/auth/member/login", a.memberLogin)
 		r.With(rateLimit(10, time.Minute)).Post("/auth/login", a.login)
 		r.Get("/gyms/showcase", a.gymShowcase)
+		r.Get("/public/gyms/catalog", a.publicGymCatalog)
+		r.Get("/public/gyms/catalog/{id}", a.publicGymCatalogItem)
+		r.Get("/public/gyms/{id}/images", a.publicGymImages)
 		r.With(rateLimit(5, time.Minute)).Post("/auth/register", a.register)
 		r.Post("/auth/login/start", a.startLogin)
 		r.Post("/auth/login/complete", a.completeLogin)
@@ -90,8 +97,10 @@ func New(u *service.UserService, c *service.GymService, f *service.FinanceServic
 			r.With(requireRole(domain.RoleCoach)).Post("/gyms", a.createGym)
 			r.With(requireRole(domain.RoleAthlete)).Get("/gyms/catalog", a.gymCatalog)
 			r.With(requireRole(domain.RoleAthlete)).Get("/gyms/catalog/{id}", a.gymCatalogItem)
-			r.With(requireRole(domain.RoleAthlete)).Post("/gyms/{id}/pay", a.payGymTuition)
-			r.With(requireRole(domain.RoleAthlete)).Post("/gyms/{id}/monthly-dues/pay", a.payMonthlyTuition)
+			r.With(requireRole(domain.RoleAthlete), rateLimit(10, time.Minute)).Post("/gyms/{id}/pay", a.payGymTuition)
+			r.With(requireRole(domain.RoleAthlete), rateLimit(10, time.Minute)).Post("/gyms/{id}/monthly-dues/pay", a.payMonthlyTuition)
+			r.With(requireRole(domain.RoleAthlete)).Get("/payments/orders/{id}", a.paymentOrder)
+			r.With(requireRole(domain.RoleAthlete), rateLimit(5, time.Minute)).Post("/payments/orders/{id}/verify", a.verifyPaymentOrder)
 			r.With(requireRole(domain.RoleAthlete)).Get("/payments/me", a.athletePayments)
 			r.With(requireRole(domain.RoleAthlete)).Get("/registration/fee", a.registrationFee)
 			r.Get("/gyms", a.listGyms)
@@ -466,6 +475,21 @@ func (a *API) gymCatalogItem(w http.ResponseWriter, r *http.Request) {
 	v, e := a.gyms.CatalogItem(r.Context(), chi.URLParam(r, "id"), current(r))
 	respond(w, e, 200, v)
 }
+func (a *API) publicGymCatalog(w http.ResponseWriter, r *http.Request) {
+	v, e := a.gyms.PublicCatalog(r.Context())
+	w.Header().Set("Cache-Control", "public, max-age=30, stale-while-revalidate=120")
+	respond(w, e, http.StatusOK, v)
+}
+func (a *API) publicGymCatalogItem(w http.ResponseWriter, r *http.Request) {
+	v, e := a.gyms.PublicCatalogItem(r.Context(), chi.URLParam(r, "id"))
+	w.Header().Set("Cache-Control", "public, max-age=30, stale-while-revalidate=120")
+	respond(w, e, http.StatusOK, v)
+}
+func (a *API) publicGymImages(w http.ResponseWriter, r *http.Request) {
+	v, e := a.gyms.PublicImages(r.Context(), chi.URLParam(r, "id"))
+	w.Header().Set("Cache-Control", "public, max-age=60, stale-while-revalidate=300")
+	respond(w, e, http.StatusOK, v)
+}
 func (a *API) gymShowcase(w http.ResponseWriter, r *http.Request) {
 	v, e := a.gyms.Showcase(r.Context())
 	w.Header().Set("Cache-Control", "public, max-age=60, stale-while-revalidate=300")
@@ -476,8 +500,43 @@ func (a *API) registrationFee(w http.ResponseWriter, r *http.Request) {
 	respond(w, e, 200, v)
 }
 func (a *API) payGymTuition(w http.ResponseWriter, r *http.Request) {
-	v, e := a.finance.PayTuition(r.Context(), current(r).ID, chi.URLParam(r, "id"))
-	respond(w, e, 201, v)
+	v, e := a.finance.StartRegistrationPayment(r.Context(), current(r).ID, chi.URLParam(r, "id"), a.paymentCallbackURL)
+	respond(w, e, http.StatusCreated, v)
+}
+
+func (a *API) zibalCallback(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, a.frontendOrigin+"/fa/payments/result?status=failed", http.StatusSeeOther)
+		return
+	}
+	trackID, err := strconv.ParseInt(r.Form.Get("trackId"), 10, 64)
+	if err != nil || trackID <= 0 {
+		http.Redirect(w, r, a.frontendOrigin+"/fa/payments/result?status=failed", http.StatusSeeOther)
+		return
+	}
+	order, err := a.finance.VerifyZibalPayment(r.Context(), trackID)
+	if err != nil {
+		log.Printf("zibal callback track=%d failed: %v", trackID, err)
+		destination := a.frontendOrigin + "/fa/payments/result?status=failed"
+		if order != nil {
+			destination += "&order=" + url.QueryEscape(order.ID)
+		}
+		http.Redirect(w, r, destination, http.StatusSeeOther)
+		return
+	}
+	destination := a.frontendOrigin + "/fa/payments/result?order=" + url.QueryEscape(order.ID)
+	http.Redirect(w, r, destination, http.StatusSeeOther)
+}
+
+func (a *API) paymentOrder(w http.ResponseWriter, r *http.Request) {
+	order, err := a.finance.PaymentOrder(r.Context(), current(r).ID, chi.URLParam(r, "id"))
+	respond(w, err, http.StatusOK, order)
+}
+
+func (a *API) verifyPaymentOrder(w http.ResponseWriter, r *http.Request) {
+	order, err := a.finance.VerifyAthletePayment(r.Context(), current(r).ID, chi.URLParam(r, "id"))
+	respond(w, err, http.StatusOK, order)
 }
 func (a *API) getGym(w http.ResponseWriter, r *http.Request) {
 	gym, e := a.gyms.Get(r.Context(), chi.URLParam(r, "id"), current(r))
@@ -569,7 +628,7 @@ func (a *API) gymAthletePayments(w http.ResponseWriter, r *http.Request) {
 	respond(w, e, http.StatusOK, payments)
 }
 func (a *API) payMonthlyTuition(w http.ResponseWriter, r *http.Request) {
-	payment, e := a.finance.PayMonthlyTuition(r.Context(), current(r).ID, chi.URLParam(r, "id"))
+	payment, e := a.finance.StartMonthlyPayment(r.Context(), current(r).ID, chi.URLParam(r, "id"), a.paymentCallbackURL)
 	respond(w, e, http.StatusCreated, payment)
 }
 func (a *API) athletePayments(w http.ResponseWriter, r *http.Request) {
@@ -818,6 +877,12 @@ func problem(w http.ResponseWriter, e error) {
 		status, code = 409, "backup_in_progress"
 	case errors.Is(e, domain.ErrInvalidBackup):
 		status, code = 400, "invalid_backup"
+	case errors.Is(e, domain.ErrPaymentGateway):
+		status, code = 502, "payment_gateway"
+	case errors.Is(e, domain.ErrPaymentFailed):
+		status, code = 422, "payment_failed"
+	case errors.Is(e, domain.ErrPaymentAmount):
+		status, code = 422, "payment_amount"
 	}
 	if status == http.StatusInternalServerError {
 		log.Printf("unhandled API error: %v", e)

@@ -193,6 +193,48 @@ type MonthlyTuitionPayment struct {
 	ToMonth    int    `json:"to_month"`
 }
 
+type PaymentOrderStatus string
+
+const (
+	PaymentOrderCreated   PaymentOrderStatus = "created"
+	PaymentOrderPending   PaymentOrderStatus = "pending"
+	PaymentOrderSucceeded PaymentOrderStatus = "succeeded"
+	PaymentOrderFailed    PaymentOrderStatus = "failed"
+)
+
+// PaymentOrder is the immutable invoice sent to the payment provider. Amounts
+// are stored in rials, matching both the existing ClubMax ledger and Zibal.
+type PaymentOrder struct {
+	ID           string             `json:"id"`
+	AthleteID    string             `json:"-"`
+	GymID        string             `json:"gym_id"`
+	Kind         string             `json:"kind"`
+	Tuition      int64              `json:"tuition_amount"`
+	PlatformFee  int64              `json:"platform_fee"`
+	Total        int64              `json:"total_amount"`
+	BillingYear  int                `json:"billing_year,omitempty"`
+	BillingMonth int                `json:"billing_month,omitempty"`
+	Status       PaymentOrderStatus `json:"status"`
+	TrackID      *int64             `json:"-"`
+	RefNumber    *string            `json:"ref_number,omitempty"`
+	Failure      *string            `json:"-"`
+	ExpiresAt    time.Time          `json:"-"`
+	CompletedAt  *time.Time         `json:"completed_at,omitempty"`
+	CreatedAt    time.Time          `json:"created_at"`
+	UpdatedAt    time.Time          `json:"updated_at"`
+}
+
+type PaymentOrderMonth struct {
+	BillingYear  int   `json:"billing_year"`
+	BillingMonth int   `json:"billing_month"`
+	Amount       int64 `json:"amount"`
+}
+
+type PaymentStart struct {
+	OrderID    string `json:"order_id"`
+	PaymentURL string `json:"payment_url"`
+}
+
 type AthletePayment struct {
 	TuitionPayment
 	GymName   string `json:"gym_name"`

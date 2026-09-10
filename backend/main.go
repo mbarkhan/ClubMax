@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -35,7 +36,7 @@ func main() {
 	defer store.DB.Close()
 	users := service.NewUserService(store, postgres.OTPStore{Store: store}, store, logNotifier{}, cfg.OTPPepper)
 	gyms := service.NewGymService(postgres.GymStore{Store: store}, store)
-	finance := service.NewFinanceService(store, store, postgres.GymStore{Store: store})
+	finance := service.NewFinanceService(store, store, postgres.GymStore{Store: store}, store, service.NewZibalGateway(cfg.ZibalMerchant, cfg.ZibalGatewayURL))
 	messages := service.NewMessageService(postgres.MessageStore{Store: store}, store)
 	tickets := service.NewTicketService(store, messages)
 	admin := service.NewAdminService(store)
@@ -48,10 +49,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	bootstrapAdmin(ctx, users)
+	if err = bootstrapAdmin(ctx, users); err != nil {
+		log.Fatal(err)
+	}
 	go runWithdrawalSettlement(ctx, finance)
 	go backups.Run(ctx, log.Printf)
-	srv := &http.Server{Addr: cfg.BackendAddress(), Handler: handler.New(users, gyms, finance, messages, tickets, admin, backups, cfg.JWTSecret, cfg.FrontendOrigin(), cfg.UploadDir), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
+	srv := &http.Server{Addr: cfg.BackendAddress(), Handler: handler.New(users, gyms, finance, messages, tickets, admin, backups, cfg.JWTSecret, cfg.FrontendOrigin(), cfg.PaymentCallbackURL(), cfg.UploadDir), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("ClubMax API listening on %s", srv.Addr)
 	log.Fatal(srv.ListenAndServe())
 }
@@ -87,13 +90,13 @@ func runWithdrawalSettlement(ctx context.Context, finance *service.FinanceServic
 	}
 }
 
-func bootstrapAdmin(ctx context.Context, s *service.UserService) {
+func bootstrapAdmin(ctx context.Context, s *service.UserService) error {
 	name, user, pass := os.Getenv("CLUBMAX_ADMIN_NAME"), os.Getenv("CLUBMAX_ADMIN_USERNAME"), os.Getenv("CLUBMAX_ADMIN_PASSWORD")
 	if name == "" || user == "" || pass == "" {
-		log.Print("admin bootstrap skipped: administrator settings are missing from clubmax.env")
-		return
+		return fmt.Errorf("admin bootstrap: CLUBMAX_ADMIN_NAME, CLUBMAX_ADMIN_USERNAME and CLUBMAX_ADMIN_PASSWORD are required")
 	}
 	if _, e := s.EnsureAdmin(ctx, name, user, pass); e != nil {
-		log.Printf("admin bootstrap: %v", e)
+		return fmt.Errorf("admin bootstrap: %w", e)
 	}
+	return nil
 }

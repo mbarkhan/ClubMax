@@ -2,7 +2,7 @@
 import { use, useCallback, useEffect, useState } from "react";
 import AdminShell from "../../../components/AdminShell";
 import "../../../admin.css";
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 type User = {
   id: string;
   role: "admin" | "coach" | "athlete" | "operator";

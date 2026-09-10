@@ -8,7 +8,7 @@ import GymImageFields from "../../../../components/GymImageFields";
 import {Time24Field, TuitionAmountField} from "../../../../components/GymInputs";
 import "../../../../auth.css";
 
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 const days = ["شنبه","یکشنبه","دوشنبه","سه‌شنبه","چهارشنبه","پنجشنبه","جمعه"];
 type GymImage={id:string;storage_key:string};
 type Gym = {id:string;name:string;province:string;city:string;address:string;phone?:string;sport:string;sport_style:string;active_weekdays:number[];start_time:string;end_time:string;tuition_mode:string;tuition_amount:number;capacity:number};

@@ -8,7 +8,7 @@ import GymImageFields from "../../components/GymImageFields";
 import GymCover from "../../components/GymCover";
 import { Time24Field, TuitionAmountField } from "../../components/GymInputs";
 import "../../auth.css";
-const API = process.env.NEXT_PUBLIC_API_URL!,
+const API = "",
   days = ["شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه"];
 type Gym = {
   id: string;

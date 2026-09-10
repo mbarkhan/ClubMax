@@ -2,13 +2,12 @@
 
 import {useEffect, useState} from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 
 export default function GymCover({gymId}: {gymId: string}) {
   const [url,setURL] = useState("");
   useEffect(()=>{
-    const token=localStorage.getItem("clubmax_access_token")||"";
-    fetch(`${API}/v1/gyms/${gymId}/images`,{headers:{Authorization:`Bearer ${token}`}})
+    fetch(`${API}/v1/public/gyms/${gymId}/images`)
       .then(response=>response.ok?response.json():[])
       .then(images=>setURL(images?.[0]?.storage_key?`${API}/media/${images[0].storage_key}`:""))
       .catch(()=>setURL(""));

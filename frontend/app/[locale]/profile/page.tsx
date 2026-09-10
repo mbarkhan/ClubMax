@@ -9,7 +9,7 @@ import IranianIBANInput from "../../components/IranianIBANInput";
 import PasswordField from "../../components/PasswordField";
 import "../../auth.css";
 
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 type User = {
   id: string;
   role: "admin" | "coach" | "athlete";

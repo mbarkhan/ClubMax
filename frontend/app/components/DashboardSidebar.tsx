@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import SiteLogo from "./SiteLogo";
 import "../dashboard-sidebar.css";
 
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 type SidebarUser = {
   role: "admin" | "coach" | "athlete";
   first_name: string;

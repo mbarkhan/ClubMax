@@ -3,7 +3,7 @@ import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import AdminShell from "../../../components/AdminShell";
 import "../../../admin.css";
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "";
 type Policy = { min_amount: number; max_amount: number; fee_bps: number; updated_at: string };
 type Overview = {
   gross_payments: number;

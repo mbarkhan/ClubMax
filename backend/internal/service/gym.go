@@ -96,6 +96,18 @@ func (s *GymService) CatalogItem(ctx context.Context, id string, actor *domain.U
 	year, month := persianYearMonth(s.now())
 	return s.gyms.GetCatalogItem(ctx, id, actor.ID, year, month)
 }
+func (s *GymService) PublicCatalog(ctx context.Context) ([]domain.GymCatalogItem, error) {
+	return s.gyms.ListPublicCatalog(ctx)
+}
+func (s *GymService) PublicCatalogItem(ctx context.Context, id string) (*domain.GymCatalogItem, error) {
+	return s.gyms.GetPublicCatalogItem(ctx, id)
+}
+func (s *GymService) PublicImages(ctx context.Context, gymID string) ([]domain.GymImage, error) {
+	if _, err := s.gyms.GetPublicCatalogItem(ctx, gymID); err != nil {
+		return nil, err
+	}
+	return s.gyms.ListGymImages(ctx, gymID)
+}
 func (s *GymService) Showcase(ctx context.Context) ([]domain.GymShowcaseItem, error) {
 	return s.gyms.ListShowcase(ctx)
 }

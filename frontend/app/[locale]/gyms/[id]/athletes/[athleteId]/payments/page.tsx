@@ -5,7 +5,7 @@ import {use,useEffect,useMemo,useState} from "react";
 import {useRouter} from "next/navigation";
 import "../../../../../../payments.css";
 
-const API=process.env.NEXT_PUBLIC_API_URL!;
+const API="";
 type Athlete={id:string;first_name:string;last_name:string};
 type Payment={id:string;gym_name:string;tuition_amount:number;platform_fee:number;total_amount:number;status:string;tracking_id:string;billing_year?:number;billing_month?:number;payment_kind:"registration"|"monthly";created_at:string};
 const money=(value:number)=>`${Number(value).toLocaleString("fa-IR")} ریال`;
