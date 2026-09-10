@@ -449,7 +449,7 @@ func pendingPaymentOrder(c context.Context, tx pgx.Tx, athleteID, gymID string) 
 }
 
 func clearStaleCreatedPaymentOrders(c context.Context, tx pgx.Tx, athleteID, gymID string, now time.Time) error {
-	_, err := tx.Exec(c, `UPDATE payment_orders SET status='failed',failure_reason='payment initialization timed out',updated_at=$3 WHERE athlete_id=$1 AND gym_id=$2 AND status='created' AND updated_at < $3-interval '2 minutes'`, athleteID, gymID, now)
+	_, err := tx.Exec(c, `UPDATE payment_orders SET status='failed',failure_reason='payment initialization timed out',updated_at=$3 WHERE athlete_id=$1 AND gym_id=$2 AND status='created' AND updated_at < ($3::timestamptz-interval '2 minutes')`, athleteID, gymID, now)
 	return dbError(err)
 }
 
