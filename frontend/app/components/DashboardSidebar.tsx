@@ -22,6 +22,7 @@ type ItemKey =
   | "withdrawals"
   | "backups"
   | "wallet"
+  | "bmi"
   | "tickets"
   | "profile";
 const roleNames = { admin: "مدیر سایت", coach: "مربی", athlete: "ورزشکار" };
@@ -38,7 +39,8 @@ function NavIcon({
     | "payments"
     | "messages"
     | "profile"
-    | "backup";
+    | "backup"
+    | "tools";
 }) {
   const paths = {
     dashboard: (
@@ -98,6 +100,11 @@ function NavIcon({
         <path d="M18 12v8M15 17l3 3 3-3" />
       </>
     ),
+    tools: (
+      <>
+        <path d="M14.7 6.3a4 4 0 0 0-5-3.8l2.1 2.1-2.8 2.8-2.1-2.1a4 4 0 0 0 5.3 5.3L20 18.5a1.8 1.8 0 0 1-2.5 2.5l-7.8-7.8a4 4 0 0 0-5.3-5.3L6.5 10l2.8-2.8Z" />
+      </>
+    ),
   };
   return (
     <svg className={`nav-icon nav-icon-${name}`} viewBox="0 0 24 24" aria-hidden="true">
@@ -117,6 +124,7 @@ export default function DashboardSidebar({
 }) {
   const router = useRouter(),
     [unreadTickets, setUnreadTickets] = useState(0),
+    [mobileOpen, setMobileOpen] = useState(false),
     initials = user.first_name[0] + (user.last_name?.[0] || ""),
     profileImage = user.face_image_id ? `${API}/media/${user.face_image_id}` : "";
   const refreshUnreadTickets = useCallback(async () => {
@@ -145,6 +153,17 @@ export default function DashboardSidebar({
       window.removeEventListener("clubmax:tickets-read", refreshUnreadTickets);
     };
   }, [refreshUnreadTickets]);
+  useEffect(() => {
+    document.body.classList.toggle("mobile-nav-open", mobileOpen);
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.classList.remove("mobile-nav-open");
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [mobileOpen]);
   const item = (
     key: ItemKey,
     href: string,
@@ -167,58 +186,51 @@ export default function DashboardSidebar({
       <span>{label}</span>
     </Link>
   );
+  const mobileItem = (
+    key: ItemKey | "explore",
+    href: string,
+    label: string,
+    icon: Parameters<typeof NavIcon>[0]["name"]
+  ) => (
+    <Link
+      className={active === key ? "active" : ""}
+      href={href}
+      onClick={() => setMobileOpen(false)}
+    >
+      <NavIcon name={icon} />
+      <span>{label}</span>
+      {key === "tickets" && unreadTickets > 0 && (
+        <b className="mobile-nav-badge">
+          {unreadTickets > 9 ? "+۹" : unreadTickets.toLocaleString("fa-IR")}
+        </b>
+      )}
+    </Link>
+  );
+  const logout = () => {
+    localStorage.clear();
+    router.replace(`/${locale}/login`);
+  };
   return (
     <aside>
       <SiteLogo href={`/${locale}`} priority />
-      <div className="mobile-dashboard-links">
-        <Link className={active === "dashboard" ? "active" : ""} href={`/${locale}/dashboard`}>
-          داشبورد
-        </Link>
-        {user.role === "admin" && (
-          <>
-            <Link className={active === "users" ? "active" : ""} href={`/${locale}/admin/users`}>
-              کاربران
-            </Link>
-            <Link className={active === "gyms" ? "active" : ""} href={`/${locale}/admin/gyms`}>
-              باشگاه‌ها
-            </Link>
-            <Link
-              className={active === "finance" ? "active" : ""}
-              href={`/${locale}/admin/finance`}
-            >
-              مالی
-            </Link>
-            <Link
-              className={active === "backups" ? "active" : ""}
-              href={`/${locale}/admin/backups`}
-            >
-              پشتیبان‌گیری
-            </Link>
-          </>
-        )}
-        {user.role === "coach" && (
-          <>
-            <Link className={active === "gyms" ? "active" : ""} href={`/${locale}/gyms`}>
-              باشگاه‌ها
-            </Link>
-            <Link className={active === "wallet" ? "active" : ""} href={`/${locale}/wallet`}>
-              کیف پول
-            </Link>
-          </>
-        )}
-        {user.role === "athlete" && (
-          <Link className={active === "payments" ? "active" : ""} href={`/${locale}/payments`}>
-            پرداخت‌ها
-          </Link>
-        )}
-        <Link className={active === "profile" ? "active" : ""} href={`/${locale}/profile`}>
-          پروفایل
-        </Link>
-        <Link className={active === "tickets" ? "active" : ""} href={`/${locale}/tickets`}>
-          پشتیبانی
-          {unreadTickets > 0 && <b className="mobile-unread-dot" aria-label="تیکت خوانده‌نشده" />}
-        </Link>
-      </div>
+      <button
+        type="button"
+        className="mobile-menu-toggle"
+        onClick={() => setMobileOpen(true)}
+        aria-label="بازکردن منوی کاربری"
+        aria-expanded={mobileOpen}
+      >
+        <span className="mobile-user-avatar">
+          {profileImage ? <img src={profileImage} alt="" /> : initials}
+        </span>
+        <span className="mobile-user-copy">
+          <b>{user.first_name}</b>
+          <small>{roleNames[user.role]}</small>
+        </span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 7h14M5 12h14M5 17h14" />
+        </svg>
+      </button>
       <div className="identity">
         <div className="profile-thumbnail">
           {profileImage ? (
@@ -246,6 +258,15 @@ export default function DashboardSidebar({
         {user.role === "athlete" && plain(`/${locale}/explore-gyms`, "باشگاه‌ها", "explore")}
         {user.role === "athlete" &&
           item("payments", `/${locale}/payments`, "پرداخت‌های من", "payments")}
+        {user.role === "athlete" && (
+          <div className="sidebar-nav-group">
+            <div className="sidebar-nav-group-title">
+              <NavIcon name="tools" />
+              <span>ابزار</span>
+            </div>
+            {item("bmi", `/${locale}/tools/bmi`, "شاخص توده بدنی", "tools")}
+          </div>
+        )}
         {item(
           "tickets",
           `/${locale}/tickets`,
@@ -254,15 +275,102 @@ export default function DashboardSidebar({
         )}
         {item("profile", `/${locale}/profile`, "پروفایل من", "profile")}
       </nav>
-      <button
-        className="logout"
-        onClick={() => {
-          localStorage.clear();
-          router.replace(`/${locale}/login`);
-        }}
-      >
+      <button className="logout" onClick={logout}>
         خروج از حساب
       </button>
+      <nav className="mobile-bottom-nav" aria-label="دسترسی سریع موبایل">
+        {mobileItem("dashboard", `/${locale}/dashboard`, "خانه", "dashboard")}
+        {user.role === "admin" && mobileItem("users", `/${locale}/admin/users`, "کاربران", "users")}
+        {user.role === "admin" && mobileItem("gyms", `/${locale}/admin/gyms`, "باشگاه‌ها", "gyms")}
+        {user.role === "admin" &&
+          mobileItem("finance", `/${locale}/admin/finance`, "مالی", "wallet")}
+        {user.role === "coach" && mobileItem("gyms", `/${locale}/gyms`, "باشگاه‌ها", "gyms")}
+        {user.role === "coach" && mobileItem("wallet", `/${locale}/wallet`, "کیف پول", "wallet")}
+        {user.role === "coach" &&
+          mobileItem("tickets", `/${locale}/tickets`, "پشتیبانی", "messages")}
+        {user.role === "athlete" &&
+          mobileItem("explore", `/${locale}/explore-gyms`, "باشگاه‌ها", "explore")}
+        {user.role === "athlete" && mobileItem("bmi", `/${locale}/tools/bmi`, "BMI", "tools")}
+        {user.role === "athlete" &&
+          mobileItem("payments", `/${locale}/payments`, "پرداخت‌ها", "payments")}
+        <button
+          type="button"
+          className={mobileOpen ? "active" : ""}
+          onClick={() => setMobileOpen(true)}
+        >
+          <svg className="nav-icon nav-icon-more" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="5" cy="12" r="1.5" />
+            <circle cx="12" cy="12" r="1.5" />
+            <circle cx="19" cy="12" r="1.5" />
+          </svg>
+          <span>بیشتر</span>
+        </button>
+      </nav>
+      <button
+        type="button"
+        className={`mobile-drawer-backdrop${mobileOpen ? " open" : ""}`}
+        aria-label="بستن منو"
+        tabIndex={mobileOpen ? 0 : -1}
+        onClick={() => setMobileOpen(false)}
+      />
+      <section
+        className={`mobile-nav-drawer${mobileOpen ? " open" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="منوی کامل کاربری"
+      >
+        <div className="mobile-drawer-handle" />
+        <header>
+          <div className="mobile-drawer-identity">
+            <span className="mobile-user-avatar">
+              {profileImage ? <img src={profileImage} alt="" /> : initials}
+            </span>
+            <div>
+              <b>
+                {user.first_name} {user.last_name}
+              </b>
+              <small>{roleNames[user.role]}</small>
+            </div>
+          </div>
+          <button type="button" onClick={() => setMobileOpen(false)} aria-label="بستن منو">
+            ×
+          </button>
+        </header>
+        <div className="mobile-drawer-grid">
+          {mobileItem("dashboard", `/${locale}/dashboard`, "داشبورد", "dashboard")}
+          {user.role === "admin" &&
+            mobileItem("users", `/${locale}/admin/users`, "مدیریت کاربران", "users")}
+          {user.role === "admin" &&
+            mobileItem("gyms", `/${locale}/admin/gyms`, "مدیریت باشگاه‌ها", "gyms")}
+          {user.role === "admin" &&
+            mobileItem("finance", `/${locale}/admin/finance`, "مدیریت مالی", "wallet")}
+          {user.role === "admin" &&
+            mobileItem("backups", `/${locale}/admin/backups`, "پشتیبان‌گیری", "backup")}
+          {user.role === "coach" && mobileItem("gyms", `/${locale}/gyms`, "باشگاه‌های من", "gyms")}
+          {user.role === "coach" &&
+            mobileItem("wallet", `/${locale}/wallet`, "کیف پول و برداشت", "wallet")}
+          {user.role === "athlete" &&
+            mobileItem("explore", `/${locale}/explore-gyms`, "جستجوی باشگاه", "explore")}
+          {user.role === "athlete" &&
+            mobileItem("payments", `/${locale}/payments`, "پرداخت‌های من", "payments")}
+          {user.role === "athlete" &&
+            mobileItem("bmi", `/${locale}/tools/bmi`, "شاخص توده بدنی", "tools")}
+          {mobileItem(
+            "tickets",
+            `/${locale}/tickets`,
+            user.role === "admin" ? "مدیریت تیکت‌ها" : "پشتیبانی و تیکت",
+            "messages"
+          )}
+          {mobileItem("profile", `/${locale}/profile`, "پروفایل من", "profile")}
+          <Link href={`/${locale}`} onClick={() => setMobileOpen(false)}>
+            <NavIcon name="explore" />
+            <span>صفحه اصلی سایت</span>
+          </Link>
+        </div>
+        <button type="button" className="mobile-logout" onClick={logout}>
+          خروج از حساب کاربری
+        </button>
+      </section>
     </aside>
   );
 }

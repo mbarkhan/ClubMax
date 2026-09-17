@@ -30,14 +30,15 @@ type API struct {
 	tickets            *service.TicketService
 	admin              *service.AdminService
 	backups            *service.BackupService
+	bodyMeasurements   *service.BodyMeasurementService
 	jwtKey             []byte
 	uploadDir          string
 	frontendOrigin     string
 	paymentCallbackURL string
 }
 
-func New(u *service.UserService, c *service.GymService, f *service.FinanceService, m *service.MessageService, tickets *service.TicketService, admin *service.AdminService, backups *service.BackupService, jwtSecret, frontendOrigin, paymentCallbackURL, uploadDir string) http.Handler {
-	a := &API{users: u, gyms: c, finance: f, messages: m, tickets: tickets, admin: admin, backups: backups, jwtKey: []byte(jwtSecret), uploadDir: uploadDir, frontendOrigin: frontendOrigin, paymentCallbackURL: paymentCallbackURL}
+func New(u *service.UserService, c *service.GymService, f *service.FinanceService, m *service.MessageService, tickets *service.TicketService, admin *service.AdminService, backups *service.BackupService, bodyMeasurements *service.BodyMeasurementService, jwtSecret, frontendOrigin, paymentCallbackURL, uploadDir string) http.Handler {
+	a := &API{users: u, gyms: c, finance: f, messages: m, tickets: tickets, admin: admin, backups: backups, bodyMeasurements: bodyMeasurements, jwtKey: []byte(jwtSecret), uploadDir: uploadDir, frontendOrigin: frontendOrigin, paymentCallbackURL: paymentCallbackURL}
 	r := chi.NewRouter()
 	r.Use(recoverer, securityHeaders, locale, cors(frontendOrigin))
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) { write(w, 200, map[string]string{"status": "ok"}) })
@@ -80,12 +81,15 @@ func New(u *service.UserService, c *service.GymService, f *service.FinanceServic
 			r.With(rateLimit(5, time.Minute)).Post("/users/me/deletion/start", a.startAccountDeletion)
 			r.With(rateLimit(10, time.Minute)).Post("/users/me/deletion/complete", a.completeAccountDeletion)
 			r.Get("/users/me", a.me)
+			r.Get("/users/me/documents", a.listMyDocuments)
 			r.Post("/users/me/documents/{kind}", a.uploadUserDocument)
+			r.Put("/users/me/documents/{kind}", a.replaceUserDocuments)
 			r.Get("/users/{id}", a.getUser)
 			r.Put("/users/{id}", a.updateUser)
 			r.With(requireRole(domain.RoleAdmin)).Get("/users", a.listUsers)
 			r.With(requireRole(domain.RoleAdmin)).Post("/admins", a.createAdmin)
 			r.With(requireRole(domain.RoleAdmin)).Put("/users/{id}/promote", a.promoteUser)
+			r.With(requireRole(domain.RoleAdmin)).Put("/users/{id}/password-reset", a.resetUserPassword)
 			r.With(requireRole(domain.RoleAdmin)).Delete("/users/{id}", a.deleteUser)
 			r.With(requireRole(domain.RoleAdmin)).Get("/admin/overview", a.adminOverview)
 			r.With(requireRole(domain.RoleAdmin)).Get("/admin/gyms", a.adminGyms)
@@ -97,12 +101,17 @@ func New(u *service.UserService, c *service.GymService, f *service.FinanceServic
 			r.With(requireRole(domain.RoleCoach)).Post("/gyms", a.createGym)
 			r.With(requireRole(domain.RoleAthlete)).Get("/gyms/catalog", a.gymCatalog)
 			r.With(requireRole(domain.RoleAthlete)).Get("/gyms/catalog/{id}", a.gymCatalogItem)
+			r.With(requireRole(domain.RoleAthlete), rateLimit(10, time.Minute)).Post("/gyms/{id}/join-requests", a.createGymJoinRequest)
+			r.With(requireRole(domain.RoleCoach, domain.RoleAthlete)).Get("/gym-join-requests", a.listGymJoinRequests)
+			r.With(requireRole(domain.RoleCoach)).Put("/gym-join-requests/{id}/review", a.reviewGymJoinRequest)
 			r.With(requireRole(domain.RoleAthlete), rateLimit(10, time.Minute)).Post("/gyms/{id}/pay", a.payGymTuition)
 			r.With(requireRole(domain.RoleAthlete), rateLimit(10, time.Minute)).Post("/gyms/{id}/monthly-dues/pay", a.payMonthlyTuition)
 			r.With(requireRole(domain.RoleAthlete)).Get("/payments/orders/{id}", a.paymentOrder)
 			r.With(requireRole(domain.RoleAthlete), rateLimit(5, time.Minute)).Post("/payments/orders/{id}/verify", a.verifyPaymentOrder)
 			r.With(requireRole(domain.RoleAthlete)).Get("/payments/me", a.athletePayments)
 			r.With(requireRole(domain.RoleAthlete)).Get("/registration/fee", a.registrationFee)
+			r.With(requireRole(domain.RoleAthlete)).Get("/athlete/bmi", a.bmiOverview)
+			r.With(requireRole(domain.RoleAthlete), rateLimit(5, time.Minute)).Post("/athlete/bmi/measurements", a.recordBodyMeasurement)
 			r.Get("/gyms", a.listGyms)
 			r.Get("/gyms/{id}", a.getGym)
 			r.Put("/gyms/{id}", a.updateGym)
@@ -361,6 +370,74 @@ func (a *API) uploadUserDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	respond(w, nil, 201, map[string]any{"document": doc, "url": fmt.Sprintf("/media/%s", filepath.ToSlash(relative))})
 }
+func (a *API) listMyDocuments(w http.ResponseWriter, r *http.Request) {
+	documents, err := a.users.Documents(r.Context(), current(r).ID)
+	respond(w, err, http.StatusOK, documents)
+}
+func (a *API) replaceUserDocuments(w http.ResponseWriter, r *http.Request) {
+	kind := domain.DocumentKind(chi.URLParam(r, "kind"))
+	r.Body = http.MaxBytesReader(w, r.Body, 6*1024*1024)
+	if err := r.ParseMultipartForm(6 * 1024 * 1024); err != nil {
+		problem(w, domain.ErrInvalid)
+		return
+	}
+	files := r.MultipartForm.File["files"]
+	if len(files) == 0 {
+		files = r.MultipartForm.File["file"]
+	}
+	newDocuments := make([]domain.UserDocument, 0, len(files))
+	newPaths := make([]string, 0, len(files))
+	cleanup := func() {
+		for _, path := range newPaths {
+			_ = os.Remove(path)
+		}
+	}
+	extensions := map[string]string{"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "application/pdf": ".pdf"}
+	for _, header := range files {
+		file, err := header.Open()
+		if err != nil {
+			cleanup()
+			problem(w, domain.ErrInvalid)
+			return
+		}
+		data, readErr := io.ReadAll(io.LimitReader(file, 500*1024+1))
+		_ = file.Close()
+		if readErr != nil || len(data) == 0 || len(data) > 500*1024 {
+			cleanup()
+			problem(w, domain.ErrInvalid)
+			return
+		}
+		mime := http.DetectContentType(data)
+		extension, ok := extensions[mime]
+		if !ok {
+			cleanup()
+			problem(w, domain.ErrInvalid)
+			return
+		}
+		relative := filepath.Join("users", current(r).ID, string(kind), uuid.NewString()+extension)
+		absolute := filepath.Join(a.uploadDir, relative)
+		if err = os.MkdirAll(filepath.Dir(absolute), 0750); err == nil {
+			err = os.WriteFile(absolute, data, 0640)
+		}
+		if err != nil {
+			cleanup()
+			problem(w, err)
+			return
+		}
+		newPaths = append(newPaths, absolute)
+		newDocuments = append(newDocuments, domain.UserDocument{StorageKey: filepath.ToSlash(relative), MIMEType: mime, Size: int64(len(data))})
+	}
+	oldDocuments, err := a.users.ReplaceDocuments(r.Context(), current(r).ID, kind, newDocuments)
+	if err != nil {
+		cleanup()
+		problem(w, err)
+		return
+	}
+	for _, document := range oldDocuments {
+		_ = os.Remove(filepath.Join(a.uploadDir, filepath.FromSlash(document.StorageKey)))
+	}
+	respond(w, nil, http.StatusOK, map[string]any{"documents": newDocuments})
+}
 func (a *API) updateUser(w http.ResponseWriter, r *http.Request) {
 	actor, id := current(r), chi.URLParam(r, "id")
 	if actor.Role != domain.RoleAdmin && actor.ID != id {
@@ -418,6 +495,20 @@ func (a *API) promoteUser(w http.ResponseWriter, r *http.Request) {
 	e := a.users.PromoteToAdmin(r.Context(), chi.URLParam(r, "id"), v.Username, v.Password)
 	respond(w, e, 200, map[string]string{"message": "کاربر به مدیر سایت تبدیل شد."})
 }
+func (a *API) resetUserPassword(w http.ResponseWriter, r *http.Request) {
+	var v struct {
+		Password string `json:"password"`
+	}
+	if decode(w, r, &v) != nil {
+		return
+	}
+	targetID := chi.URLParam(r, "id")
+	e := a.users.ResetPasswordByAdmin(r.Context(), current(r).ID, targetID, v.Password)
+	if e == nil {
+		log.Printf("administrator %s reset password for user %s", current(r).ID, targetID)
+	}
+	respond(w, e, http.StatusOK, map[string]string{"message": "رمز عبور کاربر با موفقیت بازنشانی شد."})
+}
 func (a *API) listUsers(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
@@ -474,6 +565,45 @@ func (a *API) gymCatalog(w http.ResponseWriter, r *http.Request) {
 func (a *API) gymCatalogItem(w http.ResponseWriter, r *http.Request) {
 	v, e := a.gyms.CatalogItem(r.Context(), chi.URLParam(r, "id"), current(r))
 	respond(w, e, 200, v)
+}
+func (a *API) createGymJoinRequest(w http.ResponseWriter, r *http.Request) {
+	v, e := a.gyms.RequestMembership(r.Context(), chi.URLParam(r, "id"), current(r))
+	respond(w, e, http.StatusCreated, v)
+}
+func (a *API) listGymJoinRequests(w http.ResponseWriter, r *http.Request) {
+	var status *domain.GymJoinRequestStatus
+	if raw := r.URL.Query().Get("status"); raw != "" {
+		value := domain.GymJoinRequestStatus(raw)
+		status = &value
+	}
+	v, e := a.gyms.MembershipRequests(r.Context(), current(r), status)
+	respond(w, e, http.StatusOK, v)
+}
+func (a *API) reviewGymJoinRequest(w http.ResponseWriter, r *http.Request) {
+	var v struct {
+		Status          domain.GymJoinRequestStatus `json:"status"`
+		RejectionReason *string                     `json:"rejection_reason"`
+	}
+	if decode(w, r, &v) != nil {
+		return
+	}
+	result, e := a.gyms.ReviewMembershipRequest(r.Context(), chi.URLParam(r, "id"), v.Status, v.RejectionReason, current(r))
+	respond(w, e, http.StatusOK, result)
+}
+func (a *API) bmiOverview(w http.ResponseWriter, r *http.Request) {
+	result, err := a.bodyMeasurements.Overview(r.Context(), current(r).ID)
+	respond(w, err, http.StatusOK, result)
+}
+func (a *API) recordBodyMeasurement(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		HeightCM float64 `json:"height_cm"`
+		WeightKG float64 `json:"weight_kg"`
+	}
+	if decode(w, r, &input) != nil {
+		return
+	}
+	result, err := a.bodyMeasurements.Record(r.Context(), current(r).ID, input.HeightCM, input.WeightKG)
+	respond(w, err, http.StatusCreated, result)
 }
 func (a *API) publicGymCatalog(w http.ResponseWriter, r *http.Request) {
 	v, e := a.gyms.PublicCatalog(r.Context())
@@ -855,6 +985,8 @@ func problem(w http.ResponseWriter, e error) {
 		status, code = 401, "invalid_credentials"
 	case errors.Is(e, domain.ErrProtectedAdmin):
 		status, code = 409, "protected_admin"
+	case errors.Is(e, domain.ErrProtectedAccount):
+		status, code = 409, "protected_account"
 	case errors.Is(e, domain.ErrNotFound):
 		status, code = 404, "not_found"
 	case errors.Is(e, domain.ErrConflict):
@@ -865,6 +997,14 @@ func problem(w http.ResponseWriter, e error) {
 		status, code = 422, "gym_image_limit_reached"
 	case errors.Is(e, domain.ErrGymFull):
 		status, code = 422, "gym_full"
+	case errors.Is(e, domain.ErrJoinRequestPending):
+		status, code = 409, "join_request_pending"
+	case errors.Is(e, domain.ErrJoinApprovalNeeded):
+		status, code = 409, "join_approval_required"
+	case errors.Is(e, domain.ErrMeasurementTooSoon):
+		status, code = 429, "measurement_too_soon"
+	case errors.Is(e, domain.ErrBankIBANRequired):
+		status, code = 422, "bank_iban_required"
 	case errors.Is(e, domain.ErrInsufficientFunds):
 		status, code = 422, "insufficient_funds"
 	case errors.Is(e, domain.ErrWithdrawalLimit):
@@ -890,7 +1030,7 @@ func problem(w http.ResponseWriter, e error) {
 	payload := map[string]string{"error": code, "message": message(w, code)}
 	var validation *domain.ValidationError
 	if errors.As(e, &validation) {
-		labels := map[string]string{"phone": "شماره موبایل", "role": "نقش کاربری", "password": "رمز عبور", "first_name": "نام", "last_name": "نام خانوادگی", "national_id": "کد ملی", "birth_date": "تاریخ تولد", "education": "تحصیلات", "gender": "جنسیت", "marital_status": "وضعیت تأهل", "province": "استان", "city": "استان یا شهرستان", "bank_iban": "شماره شبا", "has_medical_history": "سابقه بیماری", "blood_type": "گروه خونی", "emergency_phone": "شماره تماس اضطراری", "emergency_relation": "نسبت تماس اضطراری"}
+		labels := map[string]string{"phone": "شماره موبایل", "role": "نقش کاربری", "password": "رمز عبور", "first_name": "نام", "last_name": "نام خانوادگی", "national_id": "کد ملی", "birth_date": "تاریخ تولد", "education": "تحصیلات", "gender": "جنسیت", "marital_status": "وضعیت تأهل", "province": "استان", "city": "استان یا شهرستان", "bank_iban": "شماره شبا", "has_medical_history": "سابقه بیماری", "blood_type": "گروه خونی", "emergency_phone": "شماره تماس اضطراری", "emergency_relation": "نسبت تماس اضطراری", "height_cm": "قد", "weight_kg": "وزن"}
 		payload["field"] = validation.Field
 		if label := labels[validation.Field]; label != "" {
 			payload["message"] = label + " واردشده معتبر نیست."

@@ -95,24 +95,36 @@ export default function Wallet() {
     () => Math.floor(((Number(amount) || 0) * (policy?.fee_bps || 0)) / 10000),
     [amount, policy]
   );
+  const minimum = policy?.min_amount || 0;
+  const balanceBlocker =
+    policy && balance < minimum
+      ? balance === 0
+        ? "موجودی کیف پول شما صفر است. پس از پرداخت موفق شهریه توسط ورزشکار، سهم مربی به کیف پول افزوده می‌شود."
+        : `موجودی قابل برداشت شما از حداقل مبلغ درخواست (${money(minimum)}) کمتر است.`
+      : "";
   const request = async () => {
     setError("");
     setMessage("");
     setWorking(true);
-    const r = await fetch(`${API}/v1/withdrawals`, {
-      method: "POST",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: Number(amount) }),
-    });
-    const d = await r.json();
-    setWorking(false);
-    if (!r.ok) {
-      setError(d.message);
-      return;
+    try {
+      const r = await fetch(`${API}/v1/withdrawals`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: Number(amount) }),
+      });
+      const d = await r.json().catch(() => null);
+      if (!r.ok) {
+        setError(d?.message || "ثبت درخواست برداشت انجام نشد. دوباره تلاش کنید.");
+        return;
+      }
+      setAmount("");
+      setMessage("درخواست برداشت ثبت شد و اکنون در حال بررسی است.");
+      await load();
+    } catch {
+      setError("ارتباط با سرور برقرار نشد. اتصال خود را بررسی و دوباره تلاش کنید.");
+    } finally {
+      setWorking(false);
     }
-    setAmount("");
-    setMessage("درخواست برداشت ثبت شد و اکنون در حال بررسی است.");
-    load();
   };
   if (!user)
     return (
@@ -151,44 +163,53 @@ export default function Wallet() {
           {error && <div className="alert">{error}</div>}{" "}
           {!user.bank_iban ? (
             <div className="admin-note">
-              برای برداشت ابتدا شماره شبای معتبر خود را در صفحه پروفایل ثبت کنید.
+              <strong>شماره شبا ثبت نشده است.</strong>
+              <span>برای برداشت ابتدا شماره شبای معتبر خود را در صفحه پروفایل ثبت کنید.</span>
+              <button className="secondary-button" onClick={() => router.push(`/${locale}/profile`)}>
+                رفتن به پروفایل
+              </button>
             </div>
           ) : (
-            <div className="admin-form">
-              <label>
-                <span>مبلغ برداشت (ریال)</span>
-                <input
-                  type="number"
-                  min={policy?.min_amount || 1}
-                  max={max}
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="مبلغ را وارد کنید"
-                />
-              </label>
-              <label>
-                <span>شماره شبای مقصد</span>
-                <input className="ltr" value={user.bank_iban} disabled />
-              </label>
-              <label>
-                <span>خالص واریزی پس از کارمزد</span>
-                <input value={money(Math.max(0, (Number(amount) || 0) - fee))} disabled />
-              </label>
-              <div className="form-actions">
-                <button
-                  className="primary-button"
-                  disabled={
-                    working ||
-                    !amount ||
-                    Number(amount) < (policy?.min_amount || 0) ||
-                    Number(amount) > max
-                  }
-                  onClick={request}
-                >
-                  {working ? "در حال ثبت..." : "ثبت درخواست برداشت"}
-                </button>
+            <>
+              {balanceBlocker && <div className="admin-note withdrawal-blocker">{balanceBlocker}</div>}
+              <div className="admin-form">
+                <label>
+                  <span>مبلغ برداشت (ریال)</span>
+                  <input
+                    type="number"
+                    min={minimum || 1}
+                    max={max}
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder={minimum ? `حداقل ${money(minimum)}` : "مبلغ را وارد کنید"}
+                    disabled={Boolean(balanceBlocker)}
+                  />
+                </label>
+                <label>
+                  <span>شماره شبای مقصد</span>
+                  <input className="ltr" value={user.bank_iban} disabled />
+                </label>
+                <label>
+                  <span>خالص واریزی پس از کارمزد</span>
+                  <input value={money(Math.max(0, (Number(amount) || 0) - fee))} disabled />
+                </label>
+                <div className="form-actions">
+                  <button
+                    className="primary-button"
+                    disabled={
+                      working ||
+                      Boolean(balanceBlocker) ||
+                      !amount ||
+                      Number(amount) < minimum ||
+                      Number(amount) > max
+                    }
+                    onClick={request}
+                  >
+                    {working ? "در حال ثبت..." : "ثبت درخواست برداشت"}
+                  </button>
+                </div>
               </div>
-            </div>
+            </>
           )}
         </section>
         <section className="admin-panel" style={{ marginTop: 16 }}>

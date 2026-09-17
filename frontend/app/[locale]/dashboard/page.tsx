@@ -2,9 +2,11 @@
 import Link from "next/link";
 import GymCover from "../../components/GymCover";
 import DashboardSidebar from "../../components/DashboardSidebar";
+import BMITrendChart, { bmiStatus, BodyMeasurement } from "../../components/BMITrendChart";
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import "../../admin.css";
+import "../../bmi.css";
 const API = "";
 type User = {
   id: string;
@@ -31,6 +33,23 @@ type Gym = {
   unpaid_months: number;
   outstanding_amount: number;
   monthly_payment_due: boolean;
+};
+type JoinRequest = {
+  id: string;
+  gym_id: string;
+  gym_name: string;
+  athlete_id: string;
+  athlete_name: string;
+  athlete_phone?: string;
+  status: "pending" | "approved" | "rejected";
+  rejection_reason?: string;
+  created_at: string;
+};
+type BMIOverview = {
+  measurements: BodyMeasurement[];
+  latest?: BodyMeasurement;
+  can_record: boolean;
+  next_allowed_at?: string;
 };
 type Overview = {
   users: number;
@@ -168,30 +187,188 @@ function AdminModule({
 }
 function Member({ user, locale }: { user: User; locale: string }) {
   if (user.role === "athlete") return <AthleteWorkspace locale={locale} />;
+  return <CoachWorkspace locale={locale} />;
+}
+function CoachWorkspace({ locale }: { locale: string }) {
+  const [requests, setRequests] = useState<JoinRequest[]>([]),
+    [error, setError] = useState(""),
+    [notice, setNotice] = useState(""),
+    [busy, setBusy] = useState(""),
+    [rejecting, setRejecting] = useState(""),
+    [reasons, setReasons] = useState<Record<string, string>>({});
+  const load = () => {
+    const token = localStorage.getItem("clubmax_access_token") || "";
+    fetch(`${API}/v1/gym-join-requests?status=pending`, {
+      headers: { Authorization: `Bearer ${token}`, "Accept-Language": "fa" },
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message);
+        setRequests(data || []);
+      })
+      .catch((reason) =>
+        setError(reason instanceof Error ? reason.message : "دریافت درخواست‌ها انجام نشد.")
+      );
+  };
+  useEffect(load, []);
+  async function review(request: JoinRequest, status: "approved" | "rejected") {
+    const reason = reasons[request.id]?.trim();
+    if (status === "rejected" && !reason) {
+      setError("برای رد درخواست، علت رد را بنویسید.");
+      return;
+    }
+    setBusy(request.id);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`${API}/v1/gym-join-requests/${request.id}/review`, {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("clubmax_access_token") || ""}`,
+            "Content-Type": "application/json",
+            "Accept-Language": "fa",
+          },
+          body: JSON.stringify({
+            status,
+            rejection_reason: status === "rejected" ? reason : undefined,
+          }),
+        }),
+        data = await response.json();
+      if (!response.ok) throw new Error(data.message || "بررسی درخواست انجام نشد.");
+      setRequests((items) => items.filter((item) => item.id !== request.id));
+      setRejecting("");
+      setNotice(
+        status === "approved"
+          ? `عضویت ${request.athlete_name} تأیید شد.`
+          : `درخواست ${request.athlete_name} رد شد.`
+      );
+    } catch (reasonValue) {
+      setError(reasonValue instanceof Error ? reasonValue.message : "بررسی درخواست انجام نشد.");
+    } finally {
+      setBusy("");
+    }
+  }
   return (
-    <>
-      <section className="empty-card">
-        <div>◌</div>
-        <h3>فضای کاری شما آماده است</h3>
-        <p>
-          {user.role === "coach"
-            ? "برای شروع، اولین باشگاه خود را ثبت کنید."
-            : "باشگاه‌هایی که در آن‌ها عضو می‌شوید اینجا نمایش داده خواهند شد."}
-        </p>
+    <div className="coach-workspace">
+      <section className="join-request-panel">
+        <div className="card-head">
+          <div>
+            <span>کارتابل عضویت</span>
+            <h3>درخواست‌های در انتظار بررسی</h3>
+          </div>
+          <b>{requests.length.toLocaleString("fa-IR")} درخواست</b>
+        </div>
+        {error && <div className="alert">{error}</div>}
+        {notice && <div className="join-request-notice">{notice}</div>}
+        <div className="join-request-list">
+          {requests.map((request) => (
+            <article className="join-request-card" key={request.id}>
+              <div className="join-request-person">
+                <span>{request.athlete_name.slice(0, 1)}</span>
+                <div>
+                  <h4>{request.athlete_name}</h4>
+                  <p>{request.athlete_phone || "شماره تماس ثبت نشده"}</p>
+                </div>
+              </div>
+              <div className="join-request-gym">
+                <small>باشگاه درخواستی</small>
+                <strong>{request.gym_name}</strong>
+                <time>{new Date(request.created_at).toLocaleDateString("fa-IR")}</time>
+              </div>
+              {rejecting === request.id ? (
+                <div className="join-reject-form">
+                  <label htmlFor={`reject-${request.id}`}>علت رد درخواست</label>
+                  <textarea
+                    id={`reject-${request.id}`}
+                    maxLength={500}
+                    value={reasons[request.id] || ""}
+                    onChange={(event) =>
+                      setReasons((values) => ({ ...values, [request.id]: event.target.value }))
+                    }
+                    placeholder="علت را برای ورزشکار توضیح دهید..."
+                  />
+                  <div>
+                    <button
+                      type="button"
+                      className="reject-confirm"
+                      disabled={busy === request.id}
+                      onClick={() => review(request, "rejected")}
+                    >
+                      ثبت رد درخواست
+                    </button>
+                    <button
+                      type="button"
+                      className="cancel-review"
+                      onClick={() => setRejecting("")}
+                    >
+                      انصراف
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="join-request-actions">
+                  <button
+                    type="button"
+                    className="approve-request"
+                    disabled={Boolean(busy)}
+                    onClick={() => review(request, "approved")}
+                  >
+                    {busy === request.id ? "در حال ثبت..." : "تأیید عضویت"}
+                  </button>
+                  <button
+                    type="button"
+                    className="reject-request"
+                    disabled={Boolean(busy)}
+                    onClick={() => setRejecting(request.id)}
+                  >
+                    رد درخواست
+                  </button>
+                </div>
+              )}
+            </article>
+          ))}
+          {!requests.length && !error && (
+            <div className="join-request-empty">
+              <strong>درخواست تازه‌ای ندارید</strong>
+              <span>درخواست‌های عضویت ورزشکاران اینجا نمایش داده می‌شوند.</span>
+            </div>
+          )}
+        </div>
       </section>
-    </>
+      <section className="coach-quick-link">
+        <div>
+          <span>مدیریت باشگاه</span>
+          <h3>باشگاه‌ها، اعضا و شهریه‌ها</h3>
+        </div>
+        <Link href={`/${locale}/gyms`}>ورود به باشگاه‌های من ←</Link>
+      </section>
+    </div>
   );
 }
 function AthleteWorkspace({ locale }: { locale: string }) {
   const [gyms, setGyms] = useState<Gym[]>([]),
+    [requests, setRequests] = useState<JoinRequest[]>([]),
+    [bmi, setBMI] = useState<BMIOverview | null>(null),
     [error, setError] = useState("");
   useEffect(() => {
     const token = localStorage.getItem("clubmax_access_token") || "";
-    fetch(`${API}/v1/gyms/catalog`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message);
-        setGyms((data || []).filter((gym: Gym) => gym.joined));
+    Promise.all([
+      fetch(`${API}/v1/gyms/catalog`, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API}/v1/gym-join-requests`, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API}/v1/athlete/bmi`, { headers: { Authorization: `Bearer ${token}` } }),
+    ])
+      .then(async ([gymResponse, requestResponse, bmiResponse]) => {
+        const gymData = await gymResponse.json(),
+          requestData = await requestResponse.json(),
+          bmiData = await bmiResponse.json();
+        if (!gymResponse.ok) throw new Error(gymData.message);
+        if (!requestResponse.ok) throw new Error(requestData.message);
+        if (!bmiResponse.ok) throw new Error(bmiData.message);
+        setGyms((gymData || []).filter((gym: Gym) => gym.joined));
+        setRequests(
+          (requestData || []).filter((request: JoinRequest) => request.status !== "approved")
+        );
+        setBMI(bmiData);
       })
       .catch((reason) =>
         setError(reason instanceof Error ? reason.message : "دریافت باشگاه‌ها انجام نشد.")
@@ -199,6 +376,55 @@ function AthleteWorkspace({ locale }: { locale: string }) {
   }, []);
   return (
     <div className="athlete-workspace">
+      {bmi && (
+        <section className="dashboard-bmi-card">
+          <div className="card-head">
+            <div>
+              <span>پایش سلامت</span>
+              <h3>روند شاخص توده بدنی</h3>
+            </div>
+            <div>
+              {bmi.latest && (
+                <strong
+                  className="dashboard-bmi-value"
+                  style={{ color: (bmiStatus[bmi.latest.status] || bmiStatus.age_specific).color }}
+                >
+                  {bmi.latest.bmi.toLocaleString("fa-IR")}
+                </strong>
+              )}
+              <Link href={`/${locale}/tools/bmi`}>
+                {bmi.measurements.length ? "مشاهده جزئیات" : "ثبت اولین اندازه‌گیری"}
+              </Link>
+            </div>
+          </div>
+          <BMITrendChart measurements={bmi.measurements} compact />
+        </section>
+      )}
+      {requests.length > 0 && (
+        <section className="athlete-requests">
+          <div className="card-head">
+            <div>
+              <span>پیگیری عضویت</span>
+              <h3>درخواست‌های باشگاه</h3>
+            </div>
+          </div>
+          <div className="athlete-request-list">
+            {requests.map((request) => (
+              <Link href={`/${locale}/explore-gyms/${request.gym_id}`} key={request.id}>
+                <div>
+                  <strong>{request.gym_name}</strong>
+                  {request.status === "rejected" && request.rejection_reason && (
+                    <small>{request.rejection_reason}</small>
+                  )}
+                </div>
+                <span className={`join-status ${request.status}`}>
+                  {request.status === "pending" ? "در انتظار بررسی" : "رد شده"}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
       <section className="athlete-section">
         <div className="card-head">
           <div>
@@ -245,7 +471,7 @@ function AthleteWorkspace({ locale }: { locale: string }) {
           {!gyms.length && !error && (
             <div className="athlete-empty">
               <h3>هنوز عضو باشگاهی نیستید</h3>
-              <p>باشگاه مناسب خود را پیدا کنید و ثبت‌نام را انجام دهید.</p>
+              <p>باشگاه مناسب خود را پیدا کنید و درخواست عضویت بفرستید.</p>
               <Link href={`/${locale}/explore-gyms`}>انتخاب باشگاه</Link>
             </div>
           )}

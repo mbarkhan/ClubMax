@@ -7,6 +7,7 @@ type Preview = { name: string; url?: string; kind: "image" | "pdf" | "file" };
 export default function FileField({
   name,
   label,
+  maxFiles,
   required = false,
   accept = "image/jpeg,image/png,image/webp,application/pdf",
   maxSizeKB = 500,
@@ -53,13 +54,20 @@ export default function FileField({
         {label}
         {required && <b className="required">*</b>}
       </span>
-      <input name={name} type="file" accept={accept} required={required} onChange={change} />
+      <input
+        name={name}
+        type="file"
+        accept={accept}
+        required={required}
+        multiple={maxFiles > 1}
+        onChange={change}
+      />
       <div className="file-prompt">
         <strong>انتخاب فایل</strong>
         <small>
           {previews.length
             ? `${previews.length} فایل انتخاب شد`
-            : `حداکثر ${maxSizeKB.toLocaleString("fa-IR")} کیلوبایت`}
+            : `حداکثر ${maxFiles.toLocaleString("fa-IR")} فایل، هر فایل ${maxSizeKB.toLocaleString("fa-IR")} کیلوبایت`}
         </small>
       </div>
       {previews.length > 0 && (

@@ -7,6 +7,8 @@ import LocationFields from "../../components/LocationFields";
 import JalaliDateInput from "../../components/JalaliDateInput";
 import IranianIBANInput from "../../components/IranianIBANInput";
 import PasswordField from "../../components/PasswordField";
+import FileField from "../../components/FileField";
+import DashboardSidebar from "../../components/DashboardSidebar";
 import "../../auth.css";
 
 const API = "";
@@ -36,6 +38,13 @@ type User = {
   sports_insurance_expires_at?: string;
   face_image_id?: string;
 };
+type UserDocument = {
+  id: string;
+  kind: "profile" | "coaching" | "insurance" | "other";
+  storage_key: string;
+  mime_type: string;
+  size_bytes: number;
+};
 const education = ["below_diploma", "diploma", "associate", "bachelor", "master", "doctorate"],
   educationTitle: Record<string, string> = {
     below_diploma: "زیردیپلم",
@@ -63,7 +72,10 @@ export default function Profile({ params }: { params: Promise<{ locale: string }
     [deleteStep, setDeleteStep] = useState(false),
     [deleteCode, setDeleteCode] = useState(""),
     [deleteConfirmed, setDeleteConfirmed] = useState(false),
-    [passwordSaving, setPasswordSaving] = useState(false);
+    [passwordSaving, setPasswordSaving] = useState(false),
+    [documents, setDocuments] = useState<UserDocument[]>([]),
+    [documentBusy, setDocumentBusy] = useState(""),
+    [documentMessage, setDocumentMessage] = useState("");
   const token = () => localStorage.getItem("clubmax_access_token") || "",
     headers = () => ({
       Authorization: `Bearer ${token()}`,
@@ -71,15 +83,21 @@ export default function Profile({ params }: { params: Promise<{ locale: string }
       "Accept-Language": "fa",
     });
   useEffect(() => {
-    fetch(`${API}/v1/users/me`, { headers: { Authorization: `Bearer ${token()}` } })
-      .then(async (response) => {
-        if (response.status === 401) {
+    Promise.all([
+      fetch(`${API}/v1/users/me`, { headers: { Authorization: `Bearer ${token()}` } }),
+      fetch(`${API}/v1/users/me/documents`, { headers: { Authorization: `Bearer ${token()}` } }),
+    ])
+      .then(async ([response, documentResponse]) => {
+        if (response.status === 401 || documentResponse.status === 401) {
           router.replace(`/${locale}/login`);
           return;
         }
-        const data = await response.json();
+        const data = await response.json(),
+          documentData = await documentResponse.json();
         if (!response.ok) throw new Error(data.message);
+        if (!documentResponse.ok) throw new Error(documentData.message);
         setUser(data);
+        setDocuments(documentData || []);
         setMedical(Boolean(data.has_medical_history));
       })
       .catch((reason) =>
@@ -230,6 +248,40 @@ export default function Profile({ params }: { params: Promise<{ locale: string }
       setPasswordSaving(false);
     }
   }
+  async function replaceDocuments(event: FormEvent<HTMLFormElement>, kind: UserDocument["kind"]) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    if (!formData.getAll("files").some((item) => item instanceof File && item.size)) {
+      setError("حداقل یک فایل جدید انتخاب کنید.");
+      return;
+    }
+    setDocumentBusy(kind);
+    setDocumentMessage("");
+    setError("");
+    try {
+      const response = await fetch(`${API}/v1/users/me/documents/${kind}`, {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token()}`, "Accept-Language": "fa" },
+          body: formData,
+        }),
+        data = await response.json();
+      if (!response.ok) throw new Error(data.message || "جایگزینی فایل‌ها انجام نشد.");
+      const replacements = (data.documents || []) as UserDocument[];
+      setDocuments((items) => [...items.filter((item) => item.kind !== kind), ...replacements]);
+      if (kind === "profile" && replacements[0]) {
+        setUser((current) =>
+          current ? { ...current, face_image_id: replacements[0].storage_key } : current
+        );
+      }
+      setDocumentMessage("فایل‌های جدید جایگزین شدند و فایل‌های قبلی حذف شدند.");
+      form.reset();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "جایگزینی فایل‌ها انجام نشد.");
+    } finally {
+      setDocumentBusy("");
+    }
+  }
   if (!user)
     return (
       <main className="signup-page">
@@ -239,232 +291,350 @@ export default function Profile({ params }: { params: Promise<{ locale: string }
       </main>
     );
   return (
-    <main className="signup-page profile-page">
-      <header>
-        <Link href={`/${locale}/dashboard`}>بازگشت به داشبورد ←</Link>
-      </header>
-      <form className="signup-card profile-card" onSubmit={save}>
-        <div className="signup-title">
-          <span className="eyebrow">حساب کاربری</span>
-          <h1>پروفایل من</h1>
-          <p>اطلاعات خود را مشاهده و به‌روزرسانی کنید.</p>
-        </div>
-        {user.face_image_id && (
-          <img
-            className="profile-photo"
-            src={`${API}/media/${user.face_image_id}`}
-            alt="عکس پروفایل"
-          />
-        )}
-        <h3>اطلاعات هویتی</h3>
-        <div className="form-grid">
-          <label>
-            نام *<input name="first_name" required defaultValue={user.first_name} />
-          </label>
-          <label>
-            نام خانوادگی *<input name="last_name" required defaultValue={user.last_name} />
-          </label>
-          <label>
-            نام پدر
-            <input name="father_name" defaultValue={user.father_name || ""} />
-          </label>
-          <label>
-            کد ملی
-            <input value={user.national_id} readOnly disabled />
-            <small>کد ملی قابل ویرایش نیست.</small>
-          </label>
-          <JalaliDateInput
-            name="birth_date"
-            label="تاریخ تولد"
-            required={user.role !== "admin"}
-            initialValue={user.birth_date}
-          />
-          <label>
-            جنسیت *
-            <select name="gender" required defaultValue={user.gender}>
-              <option value="male">مرد</option>
-              <option value="female">زن</option>
-              <option value="other">سایر</option>
-            </select>
-          </label>
-          <label>
-            تحصیلات *
-            <select name="education" required defaultValue={user.education}>
-              {education.map((item) => (
-                <option key={item} value={item}>
-                  {educationTitle[item]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            رشته تحصیلی
-            <input name="field_of_study" defaultValue={user.field_of_study || ""} />
-          </label>
-          <label>
-            وضعیت تأهل
-            <select name="marital_status" defaultValue={user.marital_status}>
-              <option value="unknown">نامشخص</option>
-              <option value="single">مجرد</option>
-              <option value="married">متأهل</option>
-            </select>
-          </label>
-          <label>
-            شماره شبای بانکی
-            <IranianIBANInput initialValue={user.bank_iban || ""} />
-          </label>
-          <LocationFields initialProvince={user.province || ""} initialCounty={user.city || ""} />
-          <label className="profile-wide">
-            نشانی
-            <textarea name="address" defaultValue={user.address || ""} />
-          </label>
-        </div>
-        {user.role === "athlete" && (
-          <>
-            <h3>سلامت و بیمه ورزشی</h3>
-            <div className="form-grid">
-              <label>
-                سابقه بیماری *
-                <select
-                  value={String(medical)}
-                  onChange={(event) => setMedical(event.target.value === "true")}
-                >
-                  <option value="false">خیر</option>
-                  <option value="true">بله</option>
-                </select>
-              </label>
-              {medical && (
+    <div className={`shell ${user.role === "athlete" ? "athlete-shell" : ""}`}>
+      <DashboardSidebar user={user} locale={locale} active="profile" />
+      <main className="dash signup-page profile-page">
+        <header>
+          <Link href={`/${locale}/dashboard`}>بازگشت به داشبورد ←</Link>
+        </header>
+        <form className="signup-card profile-card" onSubmit={save}>
+          <div className="signup-title">
+            <span className="eyebrow">حساب کاربری</span>
+            <h1>پروفایل من</h1>
+            <p>اطلاعات خود را مشاهده و به‌روزرسانی کنید.</p>
+          </div>
+          {user.face_image_id && (
+            <img
+              className="profile-photo"
+              src={`${API}/media/${user.face_image_id}`}
+              alt="عکس پروفایل"
+            />
+          )}
+          <h3>اطلاعات هویتی</h3>
+          <div className="form-grid">
+            <label>
+              نام *<input name="first_name" required defaultValue={user.first_name} />
+            </label>
+            <label>
+              نام خانوادگی *<input name="last_name" required defaultValue={user.last_name} />
+            </label>
+            <label>
+              نام پدر
+              <input name="father_name" defaultValue={user.father_name || ""} />
+            </label>
+            <label>
+              کد ملی
+              <input value={user.national_id} readOnly disabled />
+              <small>کد ملی قابل ویرایش نیست.</small>
+            </label>
+            <JalaliDateInput
+              name="birth_date"
+              label="تاریخ تولد"
+              required={user.role !== "admin"}
+              initialValue={user.birth_date}
+            />
+            <label>
+              جنسیت *
+              <select name="gender" required defaultValue={user.gender}>
+                <option value="male">مرد</option>
+                <option value="female">زن</option>
+                <option value="other">سایر</option>
+              </select>
+            </label>
+            <label>
+              تحصیلات *
+              <select name="education" required defaultValue={user.education}>
+                {education.map((item) => (
+                  <option key={item} value={item}>
+                    {educationTitle[item]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              رشته تحصیلی
+              <input name="field_of_study" defaultValue={user.field_of_study || ""} />
+            </label>
+            <label>
+              وضعیت تأهل
+              <select name="marital_status" defaultValue={user.marital_status}>
+                <option value="unknown">نامشخص</option>
+                <option value="single">مجرد</option>
+                <option value="married">متأهل</option>
+              </select>
+            </label>
+            <label>
+              شماره شبای بانکی
+              <IranianIBANInput initialValue={user.bank_iban || ""} />
+            </label>
+            <LocationFields initialProvince={user.province || ""} initialCounty={user.city || ""} />
+            <label className="profile-wide">
+              نشانی
+              <textarea name="address" defaultValue={user.address || ""} />
+            </label>
+          </div>
+          {user.role === "athlete" && (
+            <>
+              <h3>سلامت و بیمه ورزشی</h3>
+              <div className="form-grid">
                 <label>
-                  شرح سابقه بیماری
-                  <textarea name="medical_history" defaultValue={user.medical_history || ""} />
+                  سابقه بیماری *
+                  <select
+                    value={String(medical)}
+                    onChange={(event) => setMedical(event.target.value === "true")}
+                  >
+                    <option value="false">خیر</option>
+                    <option value="true">بله</option>
+                  </select>
                 </label>
-              )}
-              <label>
-                گروه خونی (اختیاری)
-                <select name="blood_type" defaultValue={user.blood_type || ""}>
-                  <option value="">انتخاب نشده</option>
-                  {blood.map((item) => (
-                    <option key={item}>{item}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                شماره تماس اضطراری *
-                <input
-                  name="emergency_phone"
-                  required
-                  dir="ltr"
-                  defaultValue={user.emergency_phone || ""}
+                {medical && (
+                  <label>
+                    شرح سابقه بیماری
+                    <textarea name="medical_history" defaultValue={user.medical_history || ""} />
+                  </label>
+                )}
+                <label>
+                  گروه خونی (اختیاری)
+                  <select name="blood_type" defaultValue={user.blood_type || ""}>
+                    <option value="">انتخاب نشده</option>
+                    {blood.map((item) => (
+                      <option key={item}>{item}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  شماره تماس اضطراری *
+                  <input
+                    name="emergency_phone"
+                    required
+                    dir="ltr"
+                    defaultValue={user.emergency_phone || ""}
+                  />
+                </label>
+                <label>
+                  نسبت تماس اضطراری *
+                  <select name="emergency_relation" required defaultValue={user.emergency_relation}>
+                    {relations.map((item) => (
+                      <option key={item}>{item}</option>
+                    ))}
+                  </select>
+                </label>
+                <JalaliDateInput
+                  name="sports_insurance_expires_at"
+                  label="تاریخ اعتبار بیمه ورزشی"
+                  minYear={1400}
+                  maxYear={1450}
+                  initialValue={user.sports_insurance_expires_at}
                 />
-              </label>
-              <label>
-                نسبت تماس اضطراری *
-                <select name="emergency_relation" required defaultValue={user.emergency_relation}>
-                  {relations.map((item) => (
-                    <option key={item}>{item}</option>
-                  ))}
-                </select>
-              </label>
-              <JalaliDateInput
-                name="sports_insurance_expires_at"
-                label="تاریخ اعتبار بیمه ورزشی"
-                minYear={1400}
-                maxYear={1450}
-                initialValue={user.sports_insurance_expires_at}
-              />
-            </div>
-          </>
-        )}
-        <label>
-          توضیحات
-          <textarea name="description" defaultValue={user.description || ""} />
-        </label>
-        {error && <div className="alert">{error}</div>}
-        {message && <div className="profile-success">{message}</div>}
-        <button className="submit signup-submit" disabled={saving}>
-          {saving ? "در حال ذخیره..." : "ذخیره تغییرات"}
-        </button>
-      </form>
-      <section className="signup-card account-settings password-settings">
-        <h2>رمز عبور</h2>
-        <p>برای تغییر رمز، ابتدا رمز فعلی را وارد کنید. رمز جدید باید حداقل ۸ کاراکتر باشد.</p>
-        <form onSubmit={changePassword}>
-          <PasswordField name="current_password" label="رمز عبور فعلی" autoComplete="current-password" />
-          <PasswordField name="new_password" label="رمز عبور جدید" />
-          <PasswordField name="password_confirmation" label="تکرار رمز عبور جدید" />
+              </div>
+            </>
+          )}
+          <label>
+            توضیحات
+            <textarea name="description" defaultValue={user.description || ""} />
+          </label>
           {error && <div className="alert">{error}</div>}
           {message && <div className="profile-success">{message}</div>}
-          <button className="submit" disabled={passwordSaving}>
-            {passwordSaving ? "در حال تغییر..." : "تغییر رمز عبور"}
+          <button className="submit signup-submit" disabled={saving}>
+            {saving ? "در حال ذخیره..." : "ذخیره تغییرات"}
           </button>
         </form>
-      </section>
-      {user.role !== "admin" && (
-        <section className="signup-card account-settings">
-          <h2>شماره موبایل</h2>
-          <p>
-            شماره فعلی: <b dir="ltr">{user.phone}</b>
-          </p>
-          <div className="inline-action">
-            <input
-              value={newPhone}
-              onChange={(event) => setNewPhone(event.target.value)}
-              dir="ltr"
-              placeholder="09123456789"
+        {user.role !== "admin" && (
+          <section className="signup-card profile-documents">
+            <div className="profile-documents-head">
+              <div>
+                <span className="eyebrow">مدارک و تصاویر</span>
+                <h2>مدیریت فایل‌های من</h2>
+              </div>
+              <p>
+                با ثبت فایل جدید، تمام فایل‌های قبلی همان بخش حذف و فایل‌های انتخاب‌شده جایگزین
+                می‌شوند.
+              </p>
+            </div>
+            {error && <div className="alert">{error}</div>}
+            {documentMessage && <div className="profile-success">{documentMessage}</div>}
+            <div className="profile-document-grid">
+              <DocumentEditor
+                kind="profile"
+                title="تصویر پروفایل"
+                maxFiles={1}
+                documents={documents}
+                busy={documentBusy}
+                onSubmit={replaceDocuments}
+              />
+              {user.role === "coach" && (
+                <DocumentEditor
+                  kind="coaching"
+                  title="مدارک مربیگری"
+                  maxFiles={5}
+                  documents={documents}
+                  busy={documentBusy}
+                  onSubmit={replaceDocuments}
+                />
+              )}
+              {user.role === "athlete" && (
+                <DocumentEditor
+                  kind="insurance"
+                  title="کارت بیمه ورزشی"
+                  maxFiles={1}
+                  documents={documents}
+                  busy={documentBusy}
+                  onSubmit={replaceDocuments}
+                />
+              )}
+              <DocumentEditor
+                kind="other"
+                title="سایر مدارک"
+                maxFiles={10}
+                documents={documents}
+                busy={documentBusy}
+                onSubmit={replaceDocuments}
+              />
+            </div>
+          </section>
+        )}
+        <section className="signup-card account-settings password-settings">
+          <h2>رمز عبور</h2>
+          <p>برای تغییر رمز، ابتدا رمز فعلی را وارد کنید. رمز جدید باید حداقل ۸ کاراکتر باشد.</p>
+          <form onSubmit={changePassword}>
+            <PasswordField
+              name="current_password"
+              label="رمز عبور فعلی"
+              autoComplete="current-password"
             />
-            <button type="button" onClick={startPhone}>
-              ارسال کد تأیید
+            <PasswordField name="new_password" label="رمز عبور جدید" />
+            <PasswordField name="password_confirmation" label="تکرار رمز عبور جدید" />
+            {error && <div className="alert">{error}</div>}
+            {message && <div className="profile-success">{message}</div>}
+            <button className="submit" disabled={passwordSaving}>
+              {passwordSaving ? "در حال تغییر..." : "تغییر رمز عبور"}
             </button>
-          </div>
-          {phoneStep && (
+          </form>
+        </section>
+        {user.role !== "admin" && (
+          <section className="signup-card account-settings">
+            <h2>شماره موبایل</h2>
+            <p>
+              شماره فعلی: <b dir="ltr">{user.phone}</b>
+            </p>
             <div className="inline-action">
               <input
-                value={phoneCode}
-                onChange={(event) => setPhoneCode(event.target.value)}
-                inputMode="numeric"
-                placeholder="کد تأیید"
+                value={newPhone}
+                onChange={(event) => setNewPhone(event.target.value)}
+                dir="ltr"
+                placeholder="09123456789"
               />
-              <button type="button" onClick={completePhone}>
-                تأیید تغییر شماره
+              <button type="button" onClick={startPhone}>
+                ارسال کد تأیید
               </button>
             </div>
-          )}
-        </section>
-      )}
-      {user.role !== "admin" && (
-        <section className="signup-card danger-zone">
-          <h2>حذف حساب کاربری</h2>
-          <p>
-            با حذف حساب، اطلاعات شخصی، عضویت‌ها، پیام‌ها و اطلاعات وابسته شما از پلتفرم حذف می‌شوند.
-            این عملیات قابل بازگشت نیست.
-          </p>
-          <label>
-            <input
-              type="checkbox"
-              checked={deleteConfirmed}
-              onChange={(event) => setDeleteConfirmed(event.target.checked)}
-            />{" "}
-            پیامدهای حذف دائمی حساب را می‌پذیرم.
-          </label>
-          {!deleteStep ? (
-            <button type="button" disabled={!deleteConfirmed} onClick={startDeletion}>
-              ارسال کد حذف حساب
-            </button>
-          ) : (
-            <div className="inline-action">
+            {phoneStep && (
+              <div className="inline-action">
+                <input
+                  value={phoneCode}
+                  onChange={(event) => setPhoneCode(event.target.value)}
+                  inputMode="numeric"
+                  placeholder="کد تأیید"
+                />
+                <button type="button" onClick={completePhone}>
+                  تأیید تغییر شماره
+                </button>
+              </div>
+            )}
+          </section>
+        )}
+        {user.role !== "admin" && (
+          <section className="signup-card danger-zone">
+            <h2>حذف حساب کاربری</h2>
+            <p>
+              با حذف حساب، اطلاعات شخصی، عضویت‌ها، پیام‌ها و اطلاعات وابسته شما از پلتفرم حذف
+              می‌شوند. این عملیات قابل بازگشت نیست.
+            </p>
+            <label>
               <input
-                value={deleteCode}
-                onChange={(event) => setDeleteCode(event.target.value)}
-                inputMode="numeric"
-                placeholder="کد پیامکی"
-              />
-              <button type="button" onClick={completeDeletion}>
-                حذف دائمی حساب
+                type="checkbox"
+                checked={deleteConfirmed}
+                onChange={(event) => setDeleteConfirmed(event.target.checked)}
+              />{" "}
+              پیامدهای حذف دائمی حساب را می‌پذیرم.
+            </label>
+            {!deleteStep ? (
+              <button type="button" disabled={!deleteConfirmed} onClick={startDeletion}>
+                ارسال کد حذف حساب
               </button>
-            </div>
-          )}
-        </section>
+            ) : (
+              <div className="inline-action">
+                <input
+                  value={deleteCode}
+                  onChange={(event) => setDeleteCode(event.target.value)}
+                  inputMode="numeric"
+                  placeholder="کد پیامکی"
+                />
+                <button type="button" onClick={completeDeletion}>
+                  حذف دائمی حساب
+                </button>
+              </div>
+            )}
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function DocumentEditor({
+  kind,
+  title,
+  maxFiles,
+  documents,
+  busy,
+  onSubmit,
+}: {
+  kind: UserDocument["kind"];
+  title: string;
+  maxFiles: number;
+  documents: UserDocument[];
+  busy: string;
+  onSubmit: (event: FormEvent<HTMLFormElement>, kind: UserDocument["kind"]) => Promise<void>;
+}) {
+  const current = documents.filter((document) => document.kind === kind);
+  return (
+    <form className="profile-document-editor" onSubmit={(event) => onSubmit(event, kind)}>
+      <div>
+        <h3>{title}</h3>
+        <span>{current.length.toLocaleString("fa-IR")} فایل فعلی</span>
+      </div>
+      {current.length > 0 ? (
+        <div className="current-document-list">
+          {current.map((document) => (
+            <a
+              key={document.id || document.storage_key}
+              href={`${API}/media/${document.storage_key}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {document.mime_type.startsWith("image/") ? (
+                <img src={`${API}/media/${document.storage_key}`} alt={title} />
+              ) : (
+                <b>PDF</b>
+              )}
+              <small>مشاهده فایل</small>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p>فایلی در این بخش ثبت نشده است.</p>
       )}
-    </main>
+      <FileField
+        key={current.map((item) => item.storage_key).join("|")}
+        name="files"
+        label={`فایل جدید ${title}`}
+        maxFiles={maxFiles}
+        required
+      />
+      <button className="replace-documents-button" disabled={Boolean(busy)}>
+        {busy === kind ? "در حال جایگزینی..." : "جایگزینی فایل‌های این بخش"}
+      </button>
+    </form>
   );
 }

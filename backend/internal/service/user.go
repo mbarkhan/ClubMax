@@ -53,6 +53,39 @@ func (s *UserService) AddDocument(ctx context.Context, userID string, kind domai
 	return doc, s.docs.AddUserDocument(ctx, doc)
 }
 
+func (s *UserService) Documents(ctx context.Context, userID string) ([]domain.UserDocument, error) {
+	return s.docs.ListUserDocuments(ctx, userID)
+}
+
+func (s *UserService) ReplaceDocuments(ctx context.Context, userID string, kind domain.DocumentKind, replacements []domain.UserDocument) ([]domain.UserDocument, error) {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	limits := map[domain.DocumentKind]int{domain.DocumentCoaching: 5, domain.DocumentInsurance: 1, domain.DocumentOther: 10, domain.DocumentProfile: 1}
+	limit, validKind := limits[kind]
+	if !validKind || len(replacements) == 0 || len(replacements) > limit {
+		return nil, domain.ErrInvalid
+	}
+	if kind == domain.DocumentCoaching && user.Role != domain.RoleCoach {
+		return nil, domain.ErrForbidden
+	}
+	if kind == domain.DocumentInsurance && user.Role != domain.RoleAthlete {
+		return nil, domain.ErrForbidden
+	}
+	for index := range replacements {
+		document := &replacements[index]
+		if document.Size < 1 || document.Size > 500*1024 {
+			return nil, domain.ErrInvalid
+		}
+		document.ID = uuid.NewString()
+		document.UserID = userID
+		document.Kind = kind
+		document.CreatedAt = s.now()
+	}
+	return s.docs.ReplaceUserDocuments(ctx, userID, kind, replacements)
+}
+
 type StartRegistration struct {
 	Phone string
 	Role  domain.Role
@@ -269,6 +302,26 @@ func (s *UserService) ChangePassword(ctx context.Context, userID, currentPasswor
 		return err
 	}
 	return s.users.UpdatePassword(ctx, userID, hash)
+}
+func (s *UserService) ResetPasswordByAdmin(ctx context.Context, actorID, targetID, newPassword string) error {
+	if !validPassword(newPassword) {
+		return domain.InvalidField("password")
+	}
+	target, err := s.users.GetByID(ctx, targetID)
+	if err != nil {
+		return err
+	}
+	if target.Username != nil && strings.EqualFold(strings.TrimSpace(*target.Username), "admin") {
+		return domain.ErrProtectedAccount
+	}
+	if actorID == targetID {
+		return domain.ErrInvalidState
+	}
+	hash, err := hashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	return s.users.UpdatePassword(ctx, targetID, hash)
 }
 
 // StartPasswordReset and CompletePasswordReset are deliberately not exposed as

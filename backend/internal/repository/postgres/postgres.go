@@ -197,7 +197,7 @@ func (s *Store) ListForAthlete(c context.Context, id string) ([]domain.Gym, erro
 	return out, rows.Err()
 }
 func (s *Store) ListCatalog(c context.Context, athleteID string, year, month int) ([]domain.GymCatalogItem, error) {
-	rows, e := s.DB.Query(c, `SELECT `+gymCatalogCols+`,concat_ws(' ',u.first_name,u.last_name),(ga.athlete_id IS NOT NULL),CASE WHEN g.capacity=0 THEN NULL ELSE GREATEST(g.capacity-(SELECT count(*) FROM gym_athletes gc WHERE gc.gym_id=g.id),0) END,CASE WHEN g.tuition_mode='monthly' AND ga.athlete_id IS NOT NULL THEN GREATEST((($2*12+$3)-(ga.billing_start_year*12+ga.billing_start_month)+1)-(SELECT count(*) FROM tuition_payments tp WHERE tp.gym_id=g.id AND tp.athlete_id=$1 AND tp.billing_year IS NOT NULL AND (tp.billing_year*12+tp.billing_month) BETWEEN (ga.billing_start_year*12+ga.billing_start_month) AND ($2*12+$3)),0) ELSE 0 END FROM gyms g JOIN users u ON u.id=g.coach_id LEFT JOIN gym_athletes ga ON ga.gym_id=g.id AND ga.athlete_id=$1 ORDER BY g.created_at DESC`, athleteID, year, month)
+	rows, e := s.DB.Query(c, `SELECT `+gymCatalogCols+`,concat_ws(' ',u.first_name,u.last_name),(ga.athlete_id IS NOT NULL),EXISTS(SELECT 1 FROM tuition_payments rp WHERE rp.gym_id=g.id AND rp.athlete_id=$1 AND rp.payment_kind='registration' AND rp.status='succeeded'),jr.status,jr.rejection_reason,CASE WHEN g.capacity=0 THEN NULL ELSE GREATEST(g.capacity-(SELECT count(*) FROM gym_athletes gc WHERE gc.gym_id=g.id),0) END,CASE WHEN g.tuition_mode='monthly' AND ga.athlete_id IS NOT NULL THEN GREATEST((($2*12+$3)-(ga.billing_start_year*12+ga.billing_start_month)+1)-(SELECT count(*) FROM tuition_payments tp WHERE tp.gym_id=g.id AND tp.athlete_id=$1 AND tp.billing_year IS NOT NULL AND (tp.billing_year*12+tp.billing_month) BETWEEN (ga.billing_start_year*12+ga.billing_start_month) AND ($2*12+$3)),0) ELSE 0 END FROM gyms g JOIN users u ON u.id=g.coach_id LEFT JOIN gym_athletes ga ON ga.gym_id=g.id AND ga.athlete_id=$1 LEFT JOIN LATERAL (SELECT status,rejection_reason FROM gym_join_requests WHERE gym_id=g.id AND athlete_id=$1 ORDER BY created_at DESC LIMIT 1) jr ON true ORDER BY g.created_at DESC`, athleteID, year, month)
 	if e != nil {
 		return nil, e
 	}
@@ -205,8 +205,13 @@ func (s *Store) ListCatalog(c context.Context, athleteID string, year, month int
 	out := []domain.GymCatalogItem{}
 	for rows.Next() {
 		var v domain.GymCatalogItem
-		if e = rows.Scan(&v.ID, &v.CoachID, &v.Name, &v.Province, &v.City, &v.Address, &v.Phone, &v.Sport, &v.SportStyle, &v.ActiveWeekdays, &v.StartTime, &v.EndTime, &v.TuitionMode, &v.TuitionAmount, &v.Capacity, &v.CreatedAt, &v.UpdatedAt, &v.CoachName, &v.Joined, &v.CapacityRemaining, &v.UnpaidMonths); e != nil {
+		var requestStatus *string
+		if e = rows.Scan(&v.ID, &v.CoachID, &v.Name, &v.Province, &v.City, &v.Address, &v.Phone, &v.Sport, &v.SportStyle, &v.ActiveWeekdays, &v.StartTime, &v.EndTime, &v.TuitionMode, &v.TuitionAmount, &v.Capacity, &v.CreatedAt, &v.UpdatedAt, &v.CoachName, &v.Joined, &v.RegistrationPaid, &requestStatus, &v.JoinRequestRejectionReason, &v.CapacityRemaining, &v.UnpaidMonths); e != nil {
 			return nil, e
+		}
+		if requestStatus != nil {
+			status := domain.GymJoinRequestStatus(*requestStatus)
+			v.JoinRequestStatus = &status
 		}
 		v.OutstandingAmount = int64(v.UnpaidMonths) * v.TuitionAmount
 		v.MonthlyPaymentDue = v.UnpaidMonths > 0
@@ -216,13 +221,18 @@ func (s *Store) ListCatalog(c context.Context, athleteID string, year, month int
 }
 func (s *Store) GetCatalogItem(c context.Context, gymID, athleteID string, year, month int) (*domain.GymCatalogItem, error) {
 	v := new(domain.GymCatalogItem)
-	e := s.DB.QueryRow(c, `SELECT `+gymCatalogCols+`,concat_ws(' ',u.first_name,u.last_name),(ga.athlete_id IS NOT NULL),CASE WHEN g.capacity=0 THEN NULL ELSE GREATEST(g.capacity-(SELECT count(*) FROM gym_athletes gc WHERE gc.gym_id=g.id),0) END,CASE WHEN g.tuition_mode='monthly' AND ga.athlete_id IS NOT NULL THEN GREATEST((($3*12+$4)-(ga.billing_start_year*12+ga.billing_start_month)+1)-(SELECT count(*) FROM tuition_payments tp WHERE tp.gym_id=g.id AND tp.athlete_id=$2 AND tp.billing_year IS NOT NULL AND (tp.billing_year*12+tp.billing_month) BETWEEN (ga.billing_start_year*12+ga.billing_start_month) AND ($3*12+$4)),0) ELSE 0 END FROM gyms g JOIN users u ON u.id=g.coach_id LEFT JOIN gym_athletes ga ON ga.gym_id=g.id AND ga.athlete_id=$2 WHERE g.id=$1`, gymID, athleteID, year, month).Scan(&v.ID, &v.CoachID, &v.Name, &v.Province, &v.City, &v.Address, &v.Phone, &v.Sport, &v.SportStyle, &v.ActiveWeekdays, &v.StartTime, &v.EndTime, &v.TuitionMode, &v.TuitionAmount, &v.Capacity, &v.CreatedAt, &v.UpdatedAt, &v.CoachName, &v.Joined, &v.CapacityRemaining, &v.UnpaidMonths)
+	var requestStatus *string
+	e := s.DB.QueryRow(c, `SELECT `+gymCatalogCols+`,concat_ws(' ',u.first_name,u.last_name),(ga.athlete_id IS NOT NULL),EXISTS(SELECT 1 FROM tuition_payments rp WHERE rp.gym_id=g.id AND rp.athlete_id=$2 AND rp.payment_kind='registration' AND rp.status='succeeded'),jr.status,jr.rejection_reason,CASE WHEN g.capacity=0 THEN NULL ELSE GREATEST(g.capacity-(SELECT count(*) FROM gym_athletes gc WHERE gc.gym_id=g.id),0) END,CASE WHEN g.tuition_mode='monthly' AND ga.athlete_id IS NOT NULL THEN GREATEST((($3*12+$4)-(ga.billing_start_year*12+ga.billing_start_month)+1)-(SELECT count(*) FROM tuition_payments tp WHERE tp.gym_id=g.id AND tp.athlete_id=$2 AND tp.billing_year IS NOT NULL AND (tp.billing_year*12+tp.billing_month) BETWEEN (ga.billing_start_year*12+ga.billing_start_month) AND ($3*12+$4)),0) ELSE 0 END FROM gyms g JOIN users u ON u.id=g.coach_id LEFT JOIN gym_athletes ga ON ga.gym_id=g.id AND ga.athlete_id=$2 LEFT JOIN LATERAL (SELECT status,rejection_reason FROM gym_join_requests WHERE gym_id=g.id AND athlete_id=$2 ORDER BY created_at DESC LIMIT 1) jr ON true WHERE g.id=$1`, gymID, athleteID, year, month).Scan(&v.ID, &v.CoachID, &v.Name, &v.Province, &v.City, &v.Address, &v.Phone, &v.Sport, &v.SportStyle, &v.ActiveWeekdays, &v.StartTime, &v.EndTime, &v.TuitionMode, &v.TuitionAmount, &v.Capacity, &v.CreatedAt, &v.UpdatedAt, &v.CoachName, &v.Joined, &v.RegistrationPaid, &requestStatus, &v.JoinRequestRejectionReason, &v.CapacityRemaining, &v.UnpaidMonths)
+	if requestStatus != nil {
+		status := domain.GymJoinRequestStatus(*requestStatus)
+		v.JoinRequestStatus = &status
+	}
 	v.OutstandingAmount = int64(v.UnpaidMonths) * v.TuitionAmount
 	v.MonthlyPaymentDue = v.UnpaidMonths > 0
 	return v, dbError(e)
 }
 func (s *Store) ListPublicCatalog(c context.Context) ([]domain.GymCatalogItem, error) {
-	rows, err := s.DB.Query(c, `SELECT `+gymCatalogCols+`,concat_ws(' ',u.first_name,u.last_name),false,CASE WHEN g.capacity=0 THEN NULL ELSE GREATEST(g.capacity-(SELECT count(*) FROM gym_athletes gc WHERE gc.gym_id=g.id),0) END,0 FROM gyms g JOIN users u ON u.id=g.coach_id WHERE u.active=true ORDER BY g.created_at DESC`)
+	rows, err := s.DB.Query(c, `SELECT `+gymCatalogCols+`,concat_ws(' ',u.first_name,u.last_name),false,false,NULL::text,NULL::text,CASE WHEN g.capacity=0 THEN NULL ELSE GREATEST(g.capacity-(SELECT count(*) FROM gym_athletes gc WHERE gc.gym_id=g.id),0) END,0 FROM gyms g JOIN users u ON u.id=g.coach_id WHERE u.active=true ORDER BY g.created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +240,8 @@ func (s *Store) ListPublicCatalog(c context.Context) ([]domain.GymCatalogItem, e
 	items := []domain.GymCatalogItem{}
 	for rows.Next() {
 		var item domain.GymCatalogItem
-		if err = rows.Scan(&item.ID, &item.CoachID, &item.Name, &item.Province, &item.City, &item.Address, &item.Phone, &item.Sport, &item.SportStyle, &item.ActiveWeekdays, &item.StartTime, &item.EndTime, &item.TuitionMode, &item.TuitionAmount, &item.Capacity, &item.CreatedAt, &item.UpdatedAt, &item.CoachName, &item.Joined, &item.CapacityRemaining, &item.UnpaidMonths); err != nil {
+		var requestStatus *string
+		if err = rows.Scan(&item.ID, &item.CoachID, &item.Name, &item.Province, &item.City, &item.Address, &item.Phone, &item.Sport, &item.SportStyle, &item.ActiveWeekdays, &item.StartTime, &item.EndTime, &item.TuitionMode, &item.TuitionAmount, &item.Capacity, &item.CreatedAt, &item.UpdatedAt, &item.CoachName, &item.Joined, &item.RegistrationPaid, &requestStatus, &item.JoinRequestRejectionReason, &item.CapacityRemaining, &item.UnpaidMonths); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -239,7 +250,8 @@ func (s *Store) ListPublicCatalog(c context.Context) ([]domain.GymCatalogItem, e
 }
 func (s *Store) GetPublicCatalogItem(c context.Context, gymID string) (*domain.GymCatalogItem, error) {
 	item := new(domain.GymCatalogItem)
-	err := s.DB.QueryRow(c, `SELECT `+gymCatalogCols+`,concat_ws(' ',u.first_name,u.last_name),false,CASE WHEN g.capacity=0 THEN NULL ELSE GREATEST(g.capacity-(SELECT count(*) FROM gym_athletes gc WHERE gc.gym_id=g.id),0) END,0 FROM gyms g JOIN users u ON u.id=g.coach_id WHERE g.id=$1 AND u.active=true`, gymID).Scan(&item.ID, &item.CoachID, &item.Name, &item.Province, &item.City, &item.Address, &item.Phone, &item.Sport, &item.SportStyle, &item.ActiveWeekdays, &item.StartTime, &item.EndTime, &item.TuitionMode, &item.TuitionAmount, &item.Capacity, &item.CreatedAt, &item.UpdatedAt, &item.CoachName, &item.Joined, &item.CapacityRemaining, &item.UnpaidMonths)
+	var requestStatus *string
+	err := s.DB.QueryRow(c, `SELECT `+gymCatalogCols+`,concat_ws(' ',u.first_name,u.last_name),false,false,NULL::text,NULL::text,CASE WHEN g.capacity=0 THEN NULL ELSE GREATEST(g.capacity-(SELECT count(*) FROM gym_athletes gc WHERE gc.gym_id=g.id),0) END,0 FROM gyms g JOIN users u ON u.id=g.coach_id WHERE g.id=$1 AND u.active=true`, gymID).Scan(&item.ID, &item.CoachID, &item.Name, &item.Province, &item.City, &item.Address, &item.Phone, &item.Sport, &item.SportStyle, &item.ActiveWeekdays, &item.StartTime, &item.EndTime, &item.TuitionMode, &item.TuitionAmount, &item.Capacity, &item.CreatedAt, &item.UpdatedAt, &item.CoachName, &item.Joined, &item.RegistrationPaid, &requestStatus, &item.JoinRequestRejectionReason, &item.CapacityRemaining, &item.UnpaidMonths)
 	return item, dbError(err)
 }
 
@@ -247,7 +259,8 @@ func (s *Store) ListShowcase(c context.Context) ([]domain.GymShowcaseItem, error
 	rows, err := s.DB.Query(c, `
 		SELECT g.id, g.name, concat_ws(' ', u.first_name, u.last_name),
 		       g.sport, g.sport_style, g.start_time::text, g.end_time::text,
-		       image.storage_key
+		       image.storage_key,
+		       CASE WHEN g.capacity=0 THEN NULL ELSE GREATEST(g.capacity-(SELECT count(*) FROM gym_athletes ga WHERE ga.gym_id=g.id),0) END
 		FROM gyms g
 		JOIN users u ON u.id = g.coach_id
 		LEFT JOIN LATERAL (
@@ -267,7 +280,7 @@ func (s *Store) ListShowcase(c context.Context) ([]domain.GymShowcaseItem, error
 	items := []domain.GymShowcaseItem{}
 	for rows.Next() {
 		var item domain.GymShowcaseItem
-		if err = rows.Scan(&item.ID, &item.Name, &item.CoachName, &item.Sport, &item.SportStyle, &item.StartTime, &item.EndTime, &item.ImageStorageKey); err != nil {
+		if err = rows.Scan(&item.ID, &item.Name, &item.CoachName, &item.Sport, &item.SportStyle, &item.StartTime, &item.EndTime, &item.ImageStorageKey, &item.CapacityRemaining); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -310,6 +323,141 @@ func (s *Store) AddAthlete(c context.Context, v *domain.GymAthlete) error {
 	}
 	return tx.Commit(c)
 }
+
+const joinRequestCols = `r.id,r.gym_id,g.name,g.coach_id,r.athlete_id,concat_ws(' ',u.first_name,u.last_name),u.phone,r.status,r.rejection_reason,r.reviewed_at,r.created_at,r.updated_at`
+
+func scanJoinRequest(row pgx.Row) (*domain.GymJoinRequest, error) {
+	v := new(domain.GymJoinRequest)
+	err := row.Scan(&v.ID, &v.GymID, &v.GymName, &v.CoachID, &v.AthleteID, &v.AthleteName, &v.AthletePhone, &v.Status, &v.RejectionReason, &v.ReviewedAt, &v.CreatedAt, &v.UpdatedAt)
+	return v, dbError(err)
+}
+
+func (s *Store) CreateJoinRequest(c context.Context, v *domain.GymJoinRequest) error {
+	tx, err := s.DB.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(c)
+	var capacity, members int64
+	if err = tx.QueryRow(c, `SELECT g.coach_id,g.name,g.capacity FROM gyms g JOIN users coach ON coach.id=g.coach_id AND coach.active=true WHERE g.id=$1 FOR UPDATE OF g`, v.GymID).Scan(&v.CoachID, &v.GymName, &capacity); err != nil {
+		return dbError(err)
+	}
+	var role domain.Role
+	if err = tx.QueryRow(c, `SELECT role,concat_ws(' ',first_name,last_name),phone FROM users WHERE id=$1 AND active=true FOR SHARE`, v.AthleteID).Scan(&role, &v.AthleteName, &v.AthletePhone); err != nil {
+		return dbError(err)
+	}
+	if role != domain.RoleAthlete {
+		return domain.ErrForbidden
+	}
+	var joined, pending bool
+	if err = tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM gym_athletes WHERE gym_id=$1 AND athlete_id=$2),EXISTS(SELECT 1 FROM gym_join_requests WHERE gym_id=$1 AND athlete_id=$2 AND status='pending')`, v.GymID, v.AthleteID).Scan(&joined, &pending); err != nil {
+		return err
+	}
+	if joined {
+		return domain.ErrConflict
+	}
+	if pending {
+		return domain.ErrJoinRequestPending
+	}
+	if capacity > 0 {
+		if err = tx.QueryRow(c, `SELECT count(*) FROM gym_athletes WHERE gym_id=$1`, v.GymID).Scan(&members); err != nil {
+			return err
+		}
+		if members >= capacity {
+			return domain.ErrGymFull
+		}
+	}
+	if _, err = tx.Exec(c, `INSERT INTO gym_join_requests(id,gym_id,athlete_id,status,created_at,updated_at) VALUES($1,$2,$3,'pending',$4,$4)`, v.ID, v.GymID, v.AthleteID, v.CreatedAt); err != nil {
+		return dbError(err)
+	}
+	return tx.Commit(c)
+}
+
+func (s *Store) ListCoachJoinRequests(c context.Context, coachID string, status *domain.GymJoinRequestStatus) ([]domain.GymJoinRequest, error) {
+	filter := ""
+	if status != nil {
+		filter = string(*status)
+	}
+	rows, err := s.DB.Query(c, `SELECT `+joinRequestCols+` FROM gym_join_requests r JOIN gyms g ON g.id=r.gym_id JOIN users u ON u.id=r.athlete_id WHERE g.coach_id=$1 AND ($2='' OR r.status=$2) ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END,r.created_at DESC`, coachID, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []domain.GymJoinRequest{}
+	for rows.Next() {
+		item, scanErr := scanJoinRequest(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		items = append(items, *item)
+	}
+	return items, rows.Err()
+}
+
+func (s *Store) ListAthleteJoinRequests(c context.Context, athleteID string) ([]domain.GymJoinRequest, error) {
+	rows, err := s.DB.Query(c, `SELECT `+joinRequestCols+` FROM gym_join_requests r JOIN gyms g ON g.id=r.gym_id JOIN users u ON u.id=r.athlete_id WHERE r.athlete_id=$1 ORDER BY r.created_at DESC`, athleteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []domain.GymJoinRequest{}
+	for rows.Next() {
+		item, scanErr := scanJoinRequest(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		items = append(items, *item)
+	}
+	return items, rows.Err()
+}
+
+func (s *Store) ReviewJoinRequest(c context.Context, requestID, coachID string, status domain.GymJoinRequestStatus, reason *string, year, month int, now time.Time) (*domain.GymJoinRequest, error) {
+	tx, err := s.DB.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(c)
+	var gymID, athleteID, ownerID string
+	var current domain.GymJoinRequestStatus
+	var capacity int64
+	if err = tx.QueryRow(c, `SELECT r.gym_id,r.athlete_id,r.status,g.coach_id,g.capacity FROM gym_join_requests r JOIN gyms g ON g.id=r.gym_id WHERE r.id=$1 FOR UPDATE OF r,g`, requestID).Scan(&gymID, &athleteID, &current, &ownerID, &capacity); err != nil {
+		return nil, dbError(err)
+	}
+	if ownerID != coachID {
+		return nil, domain.ErrForbidden
+	}
+	if current != domain.GymJoinPending {
+		return nil, domain.ErrInvalidState
+	}
+	if status == domain.GymJoinApproved {
+		var members int64
+		if err = tx.QueryRow(c, `SELECT count(*) FROM gym_athletes WHERE gym_id=$1`, gymID).Scan(&members); err != nil {
+			return nil, err
+		}
+		if capacity > 0 && members >= capacity {
+			return nil, domain.ErrGymFull
+		}
+		if _, err = tx.Exec(c, `INSERT INTO gym_athletes(gym_id,athlete_id,billing_start_year,billing_start_month,registered_at) VALUES($1,$2,$3,$4,$5)`, gymID, athleteID, year, month, now); err != nil {
+			return nil, dbError(err)
+		}
+		reason = nil
+	}
+	tag, err := tx.Exec(c, `UPDATE gym_join_requests SET status=$2,rejection_reason=$3,reviewed_at=$4,updated_at=$4 WHERE id=$1 AND status='pending'`, requestID, status, reason, now)
+	if err != nil {
+		return nil, dbError(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, domain.ErrInvalidState
+	}
+	item, err := scanJoinRequest(tx.QueryRow(c, `SELECT `+joinRequestCols+` FROM gym_join_requests r JOIN gyms g ON g.id=r.gym_id JOIN users u ON u.id=r.athlete_id WHERE r.id=$1`, requestID))
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(c); err != nil {
+		return nil, dbError(err)
+	}
+	return item, nil
+}
 func (s *Store) ListGymAthletes(c context.Context, gymID string, year, month int) ([]domain.GymAthleteProfile, error) {
 	rows, e := s.DB.Query(c, `SELECT u.id,u.first_name,u.last_name,u.phone,COALESCE(EXTRACT(year FROM age(current_date,u.birth_date))::int,0),CASE WHEN g.tuition_mode='monthly' THEN GREATEST((($2*12+$3)-(ga.billing_start_year*12+ga.billing_start_month)+1)-(SELECT count(*) FROM tuition_payments tp WHERE tp.gym_id=ga.gym_id AND tp.athlete_id=ga.athlete_id AND tp.billing_year IS NOT NULL AND (tp.billing_year*12+tp.billing_month) BETWEEN (ga.billing_start_year*12+ga.billing_start_month) AND ($2*12+$3)),0) ELSE 0 END,g.tuition_amount,ga.registered_at FROM gym_athletes ga JOIN users u ON u.id=ga.athlete_id JOIN gyms g ON g.id=ga.gym_id WHERE ga.gym_id=$1 ORDER BY ga.registered_at DESC`, gymID, year, month)
 	if e != nil {
@@ -344,6 +492,68 @@ func (s *Store) CountUserDocuments(c context.Context, user string, k domain.Docu
 	var n int
 	e := s.DB.QueryRow(c, `SELECT count(*) FROM user_documents WHERE user_id=$1 AND kind=$2`, user, k).Scan(&n)
 	return n, e
+}
+func (s *Store) ListUserDocuments(c context.Context, userID string) ([]domain.UserDocument, error) {
+	rows, err := s.DB.Query(c, `SELECT id,user_id,kind,storage_key,mime_type,size_bytes,created_at FROM user_documents WHERE user_id=$1 ORDER BY kind,created_at,id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []domain.UserDocument{}
+	for rows.Next() {
+		var item domain.UserDocument
+		if err = rows.Scan(&item.ID, &item.UserID, &item.Kind, &item.StorageKey, &item.MIMEType, &item.Size, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+func (s *Store) ReplaceUserDocuments(c context.Context, userID string, kind domain.DocumentKind, replacements []domain.UserDocument) ([]domain.UserDocument, error) {
+	tx, err := s.DB.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(c)
+	if _, err = tx.Exec(c, `SELECT 1 FROM users WHERE id=$1 FOR UPDATE`, userID); err != nil {
+		return nil, dbError(err)
+	}
+	rows, err := tx.Query(c, `SELECT id,user_id,kind,storage_key,mime_type,size_bytes,created_at FROM user_documents WHERE user_id=$1 AND kind=$2 FOR UPDATE`, userID, kind)
+	if err != nil {
+		return nil, err
+	}
+	old := []domain.UserDocument{}
+	for rows.Next() {
+		var item domain.UserDocument
+		if err = rows.Scan(&item.ID, &item.UserID, &item.Kind, &item.StorageKey, &item.MIMEType, &item.Size, &item.CreatedAt); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		old = append(old, item)
+	}
+	if err = rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	if _, err = tx.Exec(c, `DELETE FROM user_documents WHERE user_id=$1 AND kind=$2`, userID, kind); err != nil {
+		return nil, dbError(err)
+	}
+	for index := range replacements {
+		document := &replacements[index]
+		if _, err = tx.Exec(c, `INSERT INTO user_documents(id,user_id,kind,storage_key,mime_type,size_bytes,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, document.ID, document.UserID, document.Kind, document.StorageKey, document.MIMEType, document.Size, document.CreatedAt); err != nil {
+			return nil, dbError(err)
+		}
+	}
+	if kind == domain.DocumentProfile {
+		if _, err = tx.Exec(c, `UPDATE users SET face_image_id=$2,updated_at=now() WHERE id=$1`, userID, replacements[0].StorageKey); err != nil {
+			return nil, dbError(err)
+		}
+	}
+	if err = tx.Commit(c); err != nil {
+		return nil, dbError(err)
+	}
+	return old, nil
 }
 func (s *Store) AddGymImage(c context.Context, v *domain.GymImage) error {
 	_, e := s.DB.Exec(c, `INSERT INTO gym_images(id,gym_id,storage_key,mime_type,size_bytes) VALUES($1,$2,$3,$4,$5)`, v.ID, v.GymID, v.StorageKey, v.MIMEType, v.Size)
@@ -381,6 +591,49 @@ func (s *Store) ListGymImages(c context.Context, gym string) ([]domain.GymImage,
 		out = append(out, v)
 	}
 	return out, rows.Err()
+}
+
+func (s *Store) CreateBodyMeasurement(c context.Context, v *domain.BodyMeasurement, minimumTime time.Time) error {
+	tx, err := s.DB.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(c)
+	var role domain.Role
+	if err = tx.QueryRow(c, `SELECT role FROM users WHERE id=$1 AND active=true FOR UPDATE`, v.AthleteID).Scan(&role); err != nil {
+		return dbError(err)
+	}
+	if role != domain.RoleAthlete {
+		return domain.ErrForbidden
+	}
+	var allowed bool
+	if err = tx.QueryRow(c, `SELECT NOT EXISTS(SELECT 1 FROM athlete_body_measurements WHERE athlete_id=$1 AND measured_at>$2)`, v.AthleteID, minimumTime).Scan(&allowed); err != nil {
+		return err
+	}
+	if !allowed {
+		return domain.ErrMeasurementTooSoon
+	}
+	if _, err = tx.Exec(c, `INSERT INTO athlete_body_measurements(id,athlete_id,height_cm,weight_kg,measured_at) VALUES($1,$2,$3,$4,$5)`, v.ID, v.AthleteID, v.HeightCM, v.WeightKG, v.MeasuredAt); err != nil {
+		return dbError(err)
+	}
+	return tx.Commit(c)
+}
+
+func (s *Store) ListBodyMeasurements(c context.Context, athleteID string, limit int) ([]domain.BodyMeasurement, error) {
+	rows, err := s.DB.Query(c, `SELECT id,athlete_id,height_cm::float8,weight_kg::float8,measured_at FROM athlete_body_measurements WHERE athlete_id=$1 ORDER BY measured_at DESC LIMIT $2`, athleteID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []domain.BodyMeasurement{}
+	for rows.Next() {
+		var item domain.BodyMeasurement
+		if err = rows.Scan(&item.ID, &item.AthleteID, &item.HeightCM, &item.WeightKG, &item.MeasuredAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 // Adapters keep the single Store usable through small domain-specific interfaces.
@@ -466,18 +719,24 @@ func (s *Store) CreateRegistrationPaymentOrder(c context.Context, athleteID, gym
 	if role != domain.RoleAthlete {
 		return nil, domain.ErrForbidden
 	}
-	var tuition, capacity int64
-	if e = tx.QueryRow(c, `SELECT g.tuition_amount,g.capacity FROM gyms g JOIN users coach ON coach.id=g.coach_id AND coach.active=true WHERE g.id=$1 FOR UPDATE OF g`, gymID).Scan(&tuition, &capacity); e != nil {
+	var tuition int64
+	if e = tx.QueryRow(c, `SELECT g.tuition_amount FROM gyms g JOIN users coach ON coach.id=g.coach_id AND coach.active=true WHERE g.id=$1 FOR UPDATE OF g`, gymID).Scan(&tuition); e != nil {
 		return nil, dbError(e)
 	}
 	if e = clearStaleCreatedPaymentOrders(c, tx, athleteID, gymID, now); e != nil {
 		return nil, e
 	}
-	var alreadyJoined bool
-	if e = tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM gym_athletes WHERE gym_id=$1 AND athlete_id=$2)`, gymID, athleteID).Scan(&alreadyJoined); e != nil {
+	if e = tx.QueryRow(c, `SELECT billing_start_year,billing_start_month FROM gym_athletes WHERE gym_id=$1 AND athlete_id=$2 FOR UPDATE`, gymID, athleteID).Scan(&year, &month); e != nil {
+		if errors.Is(e, pgx.ErrNoRows) {
+			return nil, domain.ErrJoinApprovalNeeded
+		}
+		return nil, dbError(e)
+	}
+	var alreadyPaid bool
+	if e = tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM tuition_payments WHERE gym_id=$1 AND athlete_id=$2 AND payment_kind='registration' AND status='succeeded')`, gymID, athleteID).Scan(&alreadyPaid); e != nil {
 		return nil, e
 	}
-	if alreadyJoined {
+	if alreadyPaid {
 		return nil, domain.ErrConflict
 	}
 	if existing, err := pendingPaymentOrder(c, tx, athleteID, gymID); err != nil {
@@ -494,16 +753,6 @@ func (s *Store) CreateRegistrationPaymentOrder(c context.Context, athleteID, gym
 	}
 	if creating {
 		return nil, domain.ErrConflict
-	}
-	var registered, reserved int64
-	if e = tx.QueryRow(c, `SELECT count(*) FROM gym_athletes WHERE gym_id=$1`, gymID).Scan(&registered); e != nil {
-		return nil, e
-	}
-	if e = tx.QueryRow(c, `SELECT count(*) FROM payment_orders WHERE gym_id=$1 AND kind='registration' AND status IN ('created','pending') AND expires_at>=$2`, gymID, now).Scan(&reserved); e != nil {
-		return nil, e
-	}
-	if capacity > 0 && registered+reserved >= capacity {
-		return nil, domain.ErrGymFull
 	}
 	var fee int64
 	if e = tx.QueryRow(c, `SELECT fee_amount FROM registration_fee_policy WHERE id=true FOR SHARE`).Scan(&fee); e != nil {
@@ -669,9 +918,6 @@ func (s *Store) CompletePaymentOrder(c context.Context, id string, trackID, amou
 		}
 		tracking := fmt.Sprintf("ZIBAL-%d", trackID)
 		if _, e = tx.Exec(c, `INSERT INTO tuition_payments(id,athlete_id,gym_id,coach_id,tuition_amount,platform_fee,total_amount,status,tracking_id,billing_year,billing_month,payment_kind,created_at,payment_order_id) VALUES($1,$2,$3,$4,$5,$6,$7,'succeeded',$8,$9,$10,'registration',$11,$1)`, v.ID, v.AthleteID, v.GymID, coachID, v.Tuition, v.PlatformFee, v.Total, tracking, billingYear, billingMonth, completedAt); e != nil {
-			return nil, dbError(e)
-		}
-		if _, e = tx.Exec(c, `INSERT INTO gym_athletes(gym_id,athlete_id,billing_start_year,billing_start_month,registered_at) VALUES($1,$2,$3,$4,$5)`, v.GymID, v.AthleteID, v.BillingYear, v.BillingMonth, completedAt); e != nil {
 			return nil, dbError(e)
 		}
 		if v.Tuition > 0 {

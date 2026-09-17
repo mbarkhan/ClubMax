@@ -111,6 +111,48 @@ func (s *GymService) PublicImages(ctx context.Context, gymID string) ([]domain.G
 func (s *GymService) Showcase(ctx context.Context) ([]domain.GymShowcaseItem, error) {
 	return s.gyms.ListShowcase(ctx)
 }
+func (s *GymService) RequestMembership(ctx context.Context, gymID string, actor *domain.User) (*domain.GymJoinRequest, error) {
+	if actor.Role != domain.RoleAthlete {
+		return nil, domain.ErrForbidden
+	}
+	now := s.now()
+	request := &domain.GymJoinRequest{ID: uuid.NewString(), GymID: gymID, AthleteID: actor.ID, Status: domain.GymJoinPending, CreatedAt: now, UpdatedAt: now}
+	if err := s.gyms.CreateJoinRequest(ctx, request); err != nil {
+		return nil, err
+	}
+	return request, nil
+}
+func (s *GymService) MembershipRequests(ctx context.Context, actor *domain.User, status *domain.GymJoinRequestStatus) ([]domain.GymJoinRequest, error) {
+	switch actor.Role {
+	case domain.RoleCoach:
+		if status != nil && *status != domain.GymJoinPending && *status != domain.GymJoinApproved && *status != domain.GymJoinRejected {
+			return nil, domain.ErrInvalid
+		}
+		return s.gyms.ListCoachJoinRequests(ctx, actor.ID, status)
+	case domain.RoleAthlete:
+		return s.gyms.ListAthleteJoinRequests(ctx, actor.ID)
+	default:
+		return nil, domain.ErrForbidden
+	}
+}
+func (s *GymService) ReviewMembershipRequest(ctx context.Context, requestID string, status domain.GymJoinRequestStatus, reason *string, actor *domain.User) (*domain.GymJoinRequest, error) {
+	if actor.Role != domain.RoleCoach {
+		return nil, domain.ErrForbidden
+	}
+	if status != domain.GymJoinApproved && status != domain.GymJoinRejected {
+		return nil, domain.ErrInvalid
+	}
+	if reason != nil {
+		trimmed := strings.TrimSpace(*reason)
+		reason = &trimmed
+	}
+	if status == domain.GymJoinRejected && (reason == nil || *reason == "" || len([]rune(*reason)) > 500) {
+		return nil, domain.InvalidField("rejection_reason")
+	}
+	now := s.now()
+	year, month := persianYearMonth(now)
+	return s.gyms.ReviewJoinRequest(ctx, requestID, actor.ID, status, reason, year, month, now)
+}
 func (s *GymService) Get(ctx context.Context, id string, actor *domain.User) (*domain.Gym, error) {
 	gym, err := s.gyms.GetByID(ctx, id)
 	if err != nil {

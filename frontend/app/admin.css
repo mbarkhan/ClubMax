@@ -169,6 +169,55 @@
   background: #ffeded;
   color: #a22;
 }
+.admin-icon-button {
+  display: grid !important;
+  place-items: center;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #475569 !important;
+}
+.admin-icon-button svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.admin-icon-button.promote {
+  color: #0369a1 !important;
+  border-color: #bae6fd !important;
+  background: #f0f9ff !important;
+}
+.admin-icon-button.reset {
+  color: #7c3aed !important;
+  border-color: #ddd6fe !important;
+  background: #f5f3ff !important;
+}
+.admin-icon-button.danger {
+  color: #b91c1c !important;
+  border-color: #fecaca !important;
+  background: #fef2f2 !important;
+}
+.admin-icon-button:hover {
+  filter: brightness(0.96);
+  transform: translateY(-1px);
+}
+.admin-notice {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 13px;
+}
 .primary-button {
   background: var(--green);
   color: #fff;
@@ -218,6 +267,19 @@
   color: #365047;
   font-size: 12px;
   line-height: 1.9;
+}
+.admin-note strong,
+.admin-note span {
+  display: block;
+}
+.admin-note .secondary-button {
+  margin-top: 10px;
+}
+.withdrawal-blocker {
+  margin-bottom: 14px;
+  background: #fff6dd;
+  color: #76551a;
+  border: 1px solid #f0d58a;
 }
 .admin-empty {
   text-align: center;
@@ -364,7 +426,7 @@
 }
 .backup-time-row button:disabled {
   cursor: not-allowed;
-  opacity: .4;
+  opacity: 0.4;
 }
 .backup-add-time {
   min-height: 40px;
@@ -426,7 +488,7 @@
 }
 .backup-download-panel button:disabled {
   cursor: wait;
-  opacity: .65;
+  opacity: 0.65;
 }
 .backup-history {
   margin-top: 16px;
@@ -488,7 +550,7 @@
 }
 .restore-button:disabled {
   cursor: not-allowed;
-  opacity: .5;
+  opacity: 0.5;
 }
 .backup-table {
   min-width: 680px;
@@ -562,5 +624,224 @@
   }
   .backup-download-panel button {
     width: 100%;
+  }
+}
+
+.coach-workspace,
+.athlete-workspace {
+  display: grid;
+  gap: 16px;
+}
+.join-request-panel,
+.athlete-requests,
+.coach-quick-link {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+}
+.join-request-panel .card-head b {
+  padding: 7px 11px;
+  border-radius: 99px;
+  background: #edf7f1;
+  color: var(--green);
+  font-size: 11px;
+}
+.join-request-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+.join-request-card {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.2fr) minmax(170px, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 15px;
+  border: 1px solid #e1e8e3;
+  border-radius: 13px;
+  background: #fbfdfc;
+}
+.join-request-person {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.join-request-person > span {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  background: #e6f3eb;
+  color: var(--green);
+  font-weight: 900;
+}
+.join-request-person h4,
+.join-request-gym strong {
+  margin: 0;
+  font-size: 13px;
+}
+.join-request-person p,
+.join-request-gym small,
+.join-request-gym time {
+  display: block;
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.join-request-actions {
+  display: flex;
+  gap: 7px;
+}
+.join-request-actions button,
+.join-reject-form button {
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.approve-request {
+  border: 0;
+  background: var(--green);
+  color: #fff;
+}
+.reject-request,
+.cancel-review {
+  border: 1px solid #d9a9a9;
+  background: #fff;
+  color: #9b3434;
+}
+.join-request-actions button:disabled,
+.join-reject-form button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+.join-reject-form {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 7px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.join-reject-form label {
+  font-size: 11px;
+  font-weight: 800;
+}
+.join-reject-form textarea {
+  min-height: 74px;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid #b9c5bd;
+  border-radius: 9px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+}
+.join-reject-form > div {
+  display: flex;
+  gap: 7px;
+}
+.reject-confirm {
+  border: 0;
+  background: #a93636;
+  color: #fff;
+}
+.join-request-notice {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 9px;
+  background: #e9f6ee;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+}
+.join-request-empty {
+  display: grid;
+  gap: 5px;
+  padding: 32px;
+  text-align: center;
+  color: var(--muted);
+}
+.join-request-empty strong {
+  color: #3e5047;
+}
+.coach-quick-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.coach-quick-link span {
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+}
+.coach-quick-link h3 {
+  margin: 5px 0 0;
+}
+.coach-quick-link a {
+  padding: 10px 14px;
+  border-radius: 9px;
+  background: var(--green);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+.athlete-request-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.athlete-request-list > a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  color: inherit;
+}
+.athlete-request-list strong,
+.athlete-request-list small {
+  display: block;
+}
+.athlete-request-list small {
+  max-width: 560px;
+  margin-top: 5px;
+  color: #8e2e2e;
+  font-size: 10px;
+}
+.join-status {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.join-status.pending {
+  background: #fff3ca;
+  color: #72560c;
+}
+.join-status.rejected {
+  background: #fde5e5;
+  color: #9b3434;
+}
+@media (max-width: 750px) {
+  .join-request-card {
+    grid-template-columns: 1fr;
+  }
+  .join-request-actions button {
+    flex: 1;
+  }
+  .coach-quick-link {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .coach-quick-link a {
+    text-align: center;
   }
 }

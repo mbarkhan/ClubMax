@@ -20,6 +20,11 @@ const roles = {
   athlete: "ورزشکار",
   operator: "متصدی (غیرفعال)",
 };
+function ActionIcon({ name }: { name: "promote" | "reset" | "delete" }) {
+  if (name === "promote") return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 20 7v5c0 4.4-3.4 7.6-8 9-4.6-1.4-8-4.6-8-9V7l8-4Z"/><path d="M12 15V8m0 0-3 3m3-3 3 3"/></svg>;
+  if (name === "reset") return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg>;
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6m4-6v6M9 7l1-3h4l1 3m-9 0 1 14h10l1-14"/></svg>;
+}
 export default function UsersPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = use(params),
     [users, setUsers] = useState<User[]>([]),
@@ -28,7 +33,11 @@ export default function UsersPage({ params }: { params: Promise<{ locale: string
     [error, setError] = useState(""),
     [selected, setSelected] = useState<User | null>(null),
     [username, setUsername] = useState(""),
-    [password, setPassword] = useState("");
+    [password, setPassword] = useState(""),
+    [resetTarget, setResetTarget] = useState<User | null>(null),
+    [resetPassword, setResetPassword] = useState(""),
+    [resetConfirmation, setResetConfirmation] = useState(""),
+    [notice, setNotice] = useState("");
   const load = useCallback(() => {
     const token = localStorage.getItem("clubmax_access_token") || "";
     fetch(`${API}/v1/users?limit=100&offset=${page * 100}&q=${encodeURIComponent(query)}`, {
@@ -57,6 +66,33 @@ export default function UsersPage({ params }: { params: Promise<{ locale: string
       return;
     }
     load();
+  };
+  const resetPasswordByAdmin = async () => {
+    if (!resetTarget) return;
+    setError("");
+    setNotice("");
+    if (resetPassword.length < 8) {
+      setError("رمز جدید باید حداقل ۸ کاراکتر باشد.");
+      return;
+    }
+    if (resetPassword !== resetConfirmation) {
+      setError("رمز جدید و تکرار آن یکسان نیستند.");
+      return;
+    }
+    const response = await fetch(`${API}/v1/users/${resetTarget.id}/password-reset`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${localStorage.getItem("clubmax_access_token") || ""}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ password: resetPassword }),
+      }),
+      data = await response.json();
+    if (!response.ok) {
+      setError(data.message || "بازنشانی رمز انجام نشد.");
+      return;
+    }
+    setResetTarget(null);
+    setResetPassword("");
+    setResetConfirmation("");
+    setNotice(data.message);
   };
   const promote = async () => {
     if (!selected) return;
@@ -91,6 +127,7 @@ export default function UsersPage({ params }: { params: Promise<{ locale: string
         />
       </div>
       {error && <div className="alert">{error}</div>}
+      {notice && <div className="admin-notice">{notice}</div>}
       <section className="admin-panel">
         <div className="admin-table-wrap">
           <table className="admin-table">
@@ -127,14 +164,21 @@ export default function UsersPage({ params }: { params: Promise<{ locale: string
                   <td>
                     <div className="admin-actions">
                       {user.role !== "admin" && (
-                        <button onClick={() => setSelected(user)}>تبدیل به مدیر</button>
+                        <button className="admin-icon-button promote" onClick={() => setSelected(user)} aria-label="تبدیل به مدیر" title="تبدیل به مدیر">
+                          <ActionIcon name="promote" />
+                        </button>
                       )}
                       {user.username === "admin" ? (
                         <span className="admin-badge warn">محافظت‌شده</span>
                       ) : (
-                        <button className="danger" onClick={() => remove(user)}>
-                          حذف
-                        </button>
+                        <>
+                          <button className="admin-icon-button reset" onClick={() => setResetTarget(user)} aria-label="بازنشانی رمز" title="بازنشانی رمز">
+                            <ActionIcon name="reset" />
+                          </button>
+                          <button className="admin-icon-button danger" onClick={() => remove(user)} aria-label="حذف کاربر" title="حذف کاربر">
+                            <ActionIcon name="delete" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -186,6 +230,26 @@ export default function UsersPage({ params }: { params: Promise<{ locale: string
               <button className="secondary-button" onClick={() => setSelected(null)}>
                 انصراف
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {resetTarget && (
+        <div className="dialog-backdrop">
+          <div className="admin-dialog">
+            <h3>بازنشانی رمز عبور</h3>
+            <p>رمز دلخواه جدید برای {resetTarget.first_name} {resetTarget.last_name} را وارد کنید. این رمز فقط یک‌بار در اختیار شماست.</p>
+            <label>
+              رمز عبور جدید
+              <input dir="ltr" type="password" minLength={8} value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} autoComplete="new-password" />
+            </label>
+            <label>
+              تکرار رمز عبور جدید
+              <input dir="ltr" type="password" minLength={8} value={resetConfirmation} onChange={(e) => setResetConfirmation(e.target.value)} autoComplete="new-password" />
+            </label>
+            <div className="admin-dialog-actions">
+              <button className="primary-button" onClick={resetPasswordByAdmin}>بازنشانی رمز</button>
+              <button className="secondary-button" onClick={() => { setResetTarget(null); setResetPassword(""); setResetConfirmation(""); }}>انصراف</button>
             </div>
           </div>
         </div>

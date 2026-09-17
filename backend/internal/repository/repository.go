@@ -44,6 +44,10 @@ type GymRepository interface {
 	CountByCoach(context.Context, string) (int, error)
 	Delete(context.Context, string) error
 	AddAthlete(context.Context, *domain.GymAthlete) error
+	CreateJoinRequest(context.Context, *domain.GymJoinRequest) error
+	ListCoachJoinRequests(context.Context, string, *domain.GymJoinRequestStatus) ([]domain.GymJoinRequest, error)
+	ListAthleteJoinRequests(context.Context, string) ([]domain.GymJoinRequest, error)
+	ReviewJoinRequest(context.Context, string, string, domain.GymJoinRequestStatus, *string, int, int, time.Time) (*domain.GymJoinRequest, error)
 	ListGymAthletes(context.Context, string, int, int) ([]domain.GymAthleteProfile, error)
 	RemoveAthlete(context.Context, string, string) error
 	AddGymImage(context.Context, *domain.GymImage) error
@@ -55,6 +59,13 @@ type GymRepository interface {
 type DocumentRepository interface {
 	AddUserDocument(context.Context, *domain.UserDocument) error
 	CountUserDocuments(context.Context, string, domain.DocumentKind) (int, error)
+	ListUserDocuments(context.Context, string) ([]domain.UserDocument, error)
+	ReplaceUserDocuments(context.Context, string, domain.DocumentKind, []domain.UserDocument) ([]domain.UserDocument, error)
+}
+
+type BodyMeasurementRepository interface {
+	CreateBodyMeasurement(context.Context, *domain.BodyMeasurement, time.Time) error
+	ListBodyMeasurements(context.Context, string, int) ([]domain.BodyMeasurement, error)
 }
 
 type MessageRepository interface {

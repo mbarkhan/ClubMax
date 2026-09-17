@@ -71,6 +71,28 @@ ALTER TABLE payment_orders DROP COLUMN IF EXISTS zibal_card_number;
 CREATE UNIQUE INDEX IF NOT EXISTS payment_orders_zibal_ref_unique ON payment_orders(zibal_ref_number) WHERE zibal_ref_number IS NOT NULL;
 ALTER TABLE tuition_payments ADD COLUMN IF NOT EXISTS payment_order_id uuid REFERENCES payment_orders(id) ON DELETE RESTRICT;
 CREATE INDEX IF NOT EXISTS tuition_payments_order_id ON tuition_payments(payment_order_id);`},
+	{version: 6, name: "gym_join_requests", sql: `
+CREATE TABLE IF NOT EXISTS gym_join_requests (
+ id uuid PRIMARY KEY, gym_id uuid NOT NULL REFERENCES gyms(id) ON DELETE CASCADE,
+ athlete_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ status varchar(20) NOT NULL CHECK(status IN ('pending','approved','rejected')),
+ rejection_reason varchar(500), reviewed_at timestamptz,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+ CHECK(status<>'rejected' OR rejection_reason IS NOT NULL),
+ CHECK((status='pending')=(reviewed_at IS NULL))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS gym_join_requests_one_pending ON gym_join_requests(gym_id,athlete_id) WHERE status='pending';
+CREATE INDEX IF NOT EXISTS gym_join_requests_coach_queue ON gym_join_requests(gym_id,status,created_at DESC);
+CREATE INDEX IF NOT EXISTS gym_join_requests_athlete_history ON gym_join_requests(athlete_id,created_at DESC);`},
+	{version: 7, name: "athlete_body_measurements", sql: `
+CREATE TABLE IF NOT EXISTS athlete_body_measurements (
+ id uuid PRIMARY KEY, athlete_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ height_cm numeric(5,2) NOT NULL CHECK(height_cm BETWEEN 40 AND 250),
+ weight_kg numeric(6,2) NOT NULL CHECK(weight_kg BETWEEN 5 AND 500),
+ measured_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS athlete_body_measurements_history
+ ON athlete_body_measurements(athlete_id,measured_at DESC);`},
 }
 
 func runMigrations(ctx context.Context, pool *pgxpool.Pool) error {

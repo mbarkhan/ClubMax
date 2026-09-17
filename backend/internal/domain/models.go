@@ -140,26 +140,75 @@ type GymAthleteProfile struct {
 	RegisteredAt      time.Time `json:"registered_at"`
 }
 
+type GymJoinRequestStatus string
+
+const (
+	GymJoinPending  GymJoinRequestStatus = "pending"
+	GymJoinApproved GymJoinRequestStatus = "approved"
+	GymJoinRejected GymJoinRequestStatus = "rejected"
+)
+
+type GymJoinRequest struct {
+	ID              string               `json:"id"`
+	GymID           string               `json:"gym_id"`
+	GymName         string               `json:"gym_name"`
+	CoachID         string               `json:"coach_id"`
+	AthleteID       string               `json:"athlete_id"`
+	AthleteName     string               `json:"athlete_name"`
+	AthletePhone    *string              `json:"athlete_phone,omitempty"`
+	Status          GymJoinRequestStatus `json:"status"`
+	RejectionReason *string              `json:"rejection_reason,omitempty"`
+	ReviewedAt      *time.Time           `json:"reviewed_at,omitempty"`
+	CreatedAt       time.Time            `json:"created_at"`
+	UpdatedAt       time.Time            `json:"updated_at"`
+}
+
+type BodyMeasurement struct {
+	ID         string    `json:"id"`
+	AthleteID  string    `json:"athlete_id"`
+	HeightCM   float64   `json:"height_cm"`
+	WeightKG   float64   `json:"weight_kg"`
+	BMI        float64   `json:"bmi"`
+	AgeYears   int       `json:"age_years"`
+	Percentile *float64  `json:"bmi_percentile,omitempty"`
+	HealthyMin float64   `json:"healthy_bmi_min,omitempty"`
+	HealthyMax float64   `json:"healthy_bmi_max,omitempty"`
+	Reference  string    `json:"reference"`
+	Status     string    `json:"status"`
+	MeasuredAt time.Time `json:"measured_at"`
+}
+
+type BMIOverview struct {
+	Measurements []BodyMeasurement `json:"measurements"`
+	Latest       *BodyMeasurement  `json:"latest,omitempty"`
+	CanRecord    bool              `json:"can_record"`
+	NextAllowed  *time.Time        `json:"next_allowed_at,omitempty"`
+}
+
 type GymCatalogItem struct {
 	Gym
-	CoachName         string `json:"coach_name"`
-	Joined            bool   `json:"joined"`
-	CapacityRemaining *int64 `json:"capacity_remaining"`
-	UnpaidMonths      int    `json:"unpaid_months"`
-	OutstandingAmount int64  `json:"outstanding_amount"`
-	MonthlyPaymentDue bool   `json:"monthly_payment_due"`
+	CoachName                  string                `json:"coach_name"`
+	Joined                     bool                  `json:"joined"`
+	RegistrationPaid           bool                  `json:"registration_paid"`
+	JoinRequestStatus          *GymJoinRequestStatus `json:"join_request_status,omitempty"`
+	JoinRequestRejectionReason *string               `json:"join_request_rejection_reason,omitempty"`
+	CapacityRemaining          *int64                `json:"capacity_remaining"`
+	UnpaidMonths               int                   `json:"unpaid_months"`
+	OutstandingAmount          int64                 `json:"outstanding_amount"`
+	MonthlyPaymentDue          bool                  `json:"monthly_payment_due"`
 }
 
 // GymShowcaseItem contains only the public fields used by the home-page banner.
 type GymShowcaseItem struct {
-	ID              string  `json:"id"`
-	Name            string  `json:"name"`
-	CoachName       string  `json:"coach_name"`
-	Sport           string  `json:"sport"`
-	SportStyle      string  `json:"sport_style"`
-	StartTime       string  `json:"start_time"`
-	EndTime         string  `json:"end_time"`
-	ImageStorageKey *string `json:"image_storage_key,omitempty"`
+	ID                string  `json:"id"`
+	Name              string  `json:"name"`
+	CoachName         string  `json:"coach_name"`
+	Sport             string  `json:"sport"`
+	SportStyle        string  `json:"sport_style"`
+	StartTime         string  `json:"start_time"`
+	EndTime           string  `json:"end_time"`
+	ImageStorageKey   *string `json:"image_storage_key,omitempty"`
+	CapacityRemaining *int64  `json:"capacity_remaining"`
 }
 
 type RegistrationFeePolicy struct {

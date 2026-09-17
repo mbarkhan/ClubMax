@@ -14,6 +14,7 @@ type ShowcaseGym = {
   sport_style: string;
   start_time: string;
   end_time: string;
+  capacity_remaining: number | null;
   image_storage_key?: string;
 };
 
@@ -118,6 +119,14 @@ export default function GymShowcase({ locale }: { locale: string }) {
               <dt>ساعت فعالیت</dt>
               <dd dir="ltr">
                 {shortTime(gym.start_time)} – {shortTime(gym.end_time)}
+              </dd>
+            </div>
+            <div>
+              <dt>ظرفیت باقی‌مانده</dt>
+              <dd>
+                {gym.capacity_remaining === null
+                  ? "نامحدود"
+                  : `${gym.capacity_remaining.toLocaleString("fa-IR")} نفر`}
               </dd>
             </div>
           </dl>

@@ -99,7 +99,7 @@ export default function ExploreGyms() {
       <section className="catalog-title">
         <span className="eyebrow">انتخاب باشگاه</span>
         <h1>باشگاه مناسب خود را پیدا کنید</h1>
-        <p>مشخصات باشگاه‌ها را مقایسه و پس از انتخاب، ثبت‌نام و پرداخت شهریه را تکمیل کنید.</p>
+        <p>مشخصات باشگاه‌ها را مقایسه کنید و برای باشگاه مورد نظر درخواست عضویت بفرستید.</p>
       </section>
       <section className="catalog-filters">
         <input

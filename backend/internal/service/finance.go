@@ -33,12 +33,15 @@ func (s *FinanceService) RequestWithdrawal(ctx context.Context, coachID string, 
 	if e != nil {
 		return nil, e
 	}
-	if coach.Role != domain.RoleCoach || coach.BankIBAN == nil {
+	if coach.Role != domain.RoleCoach {
 		return nil, domain.ErrInvalid
+	}
+	if coach.BankIBAN == nil || strings.TrimSpace(*coach.BankIBAN) == "" {
+		return nil, domain.ErrBankIBANRequired
 	}
 	iban, ok := NormalizeIranianIBAN(*coach.BankIBAN)
 	if !ok {
-		return nil, domain.ErrInvalid
+		return nil, domain.ErrBankIBANRequired
 	}
 	policy, e := s.wallet.GetPolicy(ctx)
 	if e != nil {
