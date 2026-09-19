@@ -459,7 +459,7 @@ func (s *Store) ReviewJoinRequest(c context.Context, requestID, coachID string, 
 	return item, nil
 }
 func (s *Store) ListGymAthletes(c context.Context, gymID string, year, month int) ([]domain.GymAthleteProfile, error) {
-	rows, e := s.DB.Query(c, `SELECT u.id,u.first_name,u.last_name,u.phone,COALESCE(EXTRACT(year FROM age(current_date,u.birth_date))::int,0),CASE WHEN g.tuition_mode='monthly' THEN GREATEST((($2*12+$3)-(ga.billing_start_year*12+ga.billing_start_month)+1)-(SELECT count(*) FROM tuition_payments tp WHERE tp.gym_id=ga.gym_id AND tp.athlete_id=ga.athlete_id AND tp.billing_year IS NOT NULL AND (tp.billing_year*12+tp.billing_month) BETWEEN (ga.billing_start_year*12+ga.billing_start_month) AND ($2*12+$3)),0) ELSE 0 END,g.tuition_amount,ga.registered_at FROM gym_athletes ga JOIN users u ON u.id=ga.athlete_id JOIN gyms g ON g.id=ga.gym_id WHERE ga.gym_id=$1 ORDER BY ga.registered_at DESC`, gymID, year, month)
+	rows, e := s.DB.Query(c, `SELECT u.id,u.first_name,u.last_name,u.phone,COALESCE(EXTRACT(year FROM age(current_date,u.birth_date))::int,0),CASE WHEN g.tuition_mode='monthly' THEN GREATEST((($2*12+$3)-(ga.billing_start_year*12+ga.billing_start_month)+1)-(SELECT count(*) FROM tuition_payments tp WHERE tp.gym_id=ga.gym_id AND tp.athlete_id=ga.athlete_id AND tp.billing_year IS NOT NULL AND (tp.billing_year*12+tp.billing_month) BETWEEN (ga.billing_start_year*12+ga.billing_start_month) AND ($2*12+$3)),0) ELSE 0 END,g.tuition_amount,ga.registered_at,latest.weight_kg::float8 FROM gym_athletes ga JOIN users u ON u.id=ga.athlete_id JOIN gyms g ON g.id=ga.gym_id LEFT JOIN LATERAL (SELECT weight_kg FROM athlete_body_measurements WHERE athlete_id=ga.athlete_id ORDER BY measured_at DESC,id DESC LIMIT 1) latest ON true WHERE ga.gym_id=$1 ORDER BY ga.registered_at DESC`, gymID, year, month)
 	if e != nil {
 		return nil, e
 	}
@@ -468,7 +468,7 @@ func (s *Store) ListGymAthletes(c context.Context, gymID string, year, month int
 	for rows.Next() {
 		var v domain.GymAthleteProfile
 		var tuitionAmount int64
-		if e = rows.Scan(&v.ID, &v.FirstName, &v.LastName, &v.Phone, &v.Age, &v.UnpaidMonths, &tuitionAmount, &v.RegisteredAt); e != nil {
+		if e = rows.Scan(&v.ID, &v.FirstName, &v.LastName, &v.Phone, &v.Age, &v.UnpaidMonths, &tuitionAmount, &v.RegisteredAt, &v.LastWeightKG); e != nil {
 			return nil, e
 		}
 		v.OutstandingAmount = int64(v.UnpaidMonths) * tuitionAmount
@@ -655,6 +655,84 @@ func (o GymStore) GetByID(c context.Context, id string) (*domain.Gym, error) {
 	return o.GetGymByID(c, id)
 }
 func (o GymStore) Delete(c context.Context, id string) error { return o.DeleteGym(c, id) }
+
+func (o GymStore) ListGymAttendance(c context.Context, gymID string, date time.Time) ([]domain.GymAttendanceAthlete, error) {
+	rows, err := o.DB.Query(c, `SELECT u.id,u.first_name,u.last_name,(ga.athlete_id IS NOT NULL)
+		FROM gym_athletes members JOIN users u ON u.id=members.athlete_id
+		LEFT JOIN gym_attendance ga ON ga.gym_id=members.gym_id AND ga.athlete_id=members.athlete_id AND ga.attendance_date=$2
+		WHERE members.gym_id=$1 ORDER BY u.first_name,u.last_name,u.id`, gymID, date)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []domain.GymAttendanceAthlete{}
+	for rows.Next() {
+		var item domain.GymAttendanceAthlete
+		if err := rows.Scan(&item.ID, &item.FirstName, &item.LastName, &item.Present); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (o GymStore) ListGymAttendanceHistory(c context.Context, gymID string, from, until time.Time) ([]domain.GymAttendanceRecord, error) {
+	rows, err := o.DB.Query(c, `SELECT attendance_date,athlete_id FROM gym_attendance WHERE gym_id=$1 AND attendance_date >= $2 AND attendance_date < $3 ORDER BY attendance_date,athlete_id`, gymID, from, until)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []domain.GymAttendanceRecord{}
+	for rows.Next() {
+		var item domain.GymAttendanceRecord
+		if err := rows.Scan(&item.AttendanceDate, &item.AthleteID); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (o GymStore) ListAthleteGymAttendance(c context.Context, gymID, athleteID string) ([]domain.GymAttendanceRecord, error) {
+	rows, err := o.DB.Query(c, `SELECT dates.attendance_date,$2,EXISTS(SELECT 1 FROM gym_attendance own WHERE own.gym_id=$1 AND own.athlete_id=$2 AND own.attendance_date=dates.attendance_date)
+		FROM (SELECT DISTINCT attendance_date FROM gym_attendance WHERE gym_id=$1) dates ORDER BY dates.attendance_date DESC`, gymID, athleteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []domain.GymAttendanceRecord{}
+	for rows.Next() {
+		var item domain.GymAttendanceRecord
+		if err := rows.Scan(&item.AttendanceDate, &item.AthleteID, &item.Present); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (o GymStore) SetGymAttendance(c context.Context, gymID, athleteID string, date time.Time, present bool, recordedBy string) error {
+	if present {
+		tag, err := o.DB.Exec(c, `INSERT INTO gym_attendance(gym_id,athlete_id,attendance_date,recorded_by)
+			SELECT $1,$2,$3,$4 WHERE EXISTS(SELECT 1 FROM gym_athletes WHERE gym_id=$1 AND athlete_id=$2)
+			ON CONFLICT(gym_id,athlete_id,attendance_date) DO UPDATE SET recorded_by=EXCLUDED.recorded_by,recorded_at=now()`, gymID, athleteID, date, recordedBy)
+		if err == nil && tag.RowsAffected() == 0 {
+			return domain.ErrNotFound
+		}
+		return dbError(err)
+	}
+	tag, err := o.DB.Exec(c, `DELETE FROM gym_attendance WHERE gym_id=$1 AND athlete_id=$2 AND attendance_date=$3`, gymID, athleteID, date)
+	if err == nil && tag.RowsAffected() == 0 {
+		var member bool
+		if membershipErr := o.DB.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM gym_athletes WHERE gym_id=$1 AND athlete_id=$2)`, gymID, athleteID).Scan(&member); membershipErr != nil {
+			return dbError(membershipErr)
+		}
+		if !member {
+			return domain.ErrNotFound
+		}
+	}
+	return dbError(err)
+}
 
 func (s *Store) GetPolicy(c context.Context) (domain.WithdrawalPolicy, error) {
 	var p domain.WithdrawalPolicy

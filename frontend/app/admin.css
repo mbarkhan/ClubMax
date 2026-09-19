@@ -241,6 +241,39 @@
   color: #fff;
   border-color: #176b4d;
 }
+.iban-copy-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+}
+.iban-copy-row small {
+  margin: 0;
+}
+.copy-iban-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border: 1px solid #c6d6cd;
+  border-radius: 7px;
+  background: #f7fbf8;
+  color: #176b4d;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.copy-iban-button:hover {
+  border-color: #78ad8e;
+  background: #edf7f0;
+}
+.copy-iban-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
 .admin-form {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -830,6 +863,25 @@
   color: #9b3434;
 }
 @media (max-width: 750px) {
+  /* member.css hides generic shell nav elements on phones; financial tabs are page content. */
+  .shell .dash .admin-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin: 0 -14px 16px;
+    padding: 0 14px 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .shell .dash .admin-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .shell .dash .admin-tabs a {
+    flex: 0 0 auto;
+    padding: 9px 11px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
   .join-request-card {
     grid-template-columns: 1fr;
   }

@@ -258,6 +258,51 @@ func (s *GymService) Athletes(ctx context.Context, gymID string, actor *domain.U
 	year, month := persianYearMonth(s.now())
 	return s.gyms.ListGymAthletes(ctx, gymID, year, month)
 }
+func (s *GymService) Attendance(ctx context.Context, gymID string, date time.Time, actor *domain.User) ([]domain.GymAttendanceAthlete, error) {
+	gym, err := s.gyms.GetByID(ctx, gymID)
+	if err != nil {
+		return nil, err
+	}
+	if actor.Role != domain.RoleCoach || gym.CoachID != actor.ID {
+		return nil, domain.ErrForbidden
+	}
+	return s.gyms.ListGymAttendance(ctx, gymID, date)
+}
+func (s *GymService) SetAttendance(ctx context.Context, gymID, athleteID string, date time.Time, present bool, actor *domain.User) error {
+	gym, err := s.gyms.GetByID(ctx, gymID)
+	if err != nil {
+		return err
+	}
+	if actor.Role != domain.RoleCoach || gym.CoachID != actor.ID {
+		return domain.ErrForbidden
+	}
+	return s.gyms.SetGymAttendance(ctx, gymID, athleteID, date, present, actor.ID)
+}
+func (s *GymService) AttendanceHistory(ctx context.Context, gymID string, from, until time.Time, actor *domain.User) ([]domain.GymAttendanceRecord, error) {
+	gym, err := s.gyms.GetByID(ctx, gymID)
+	if err != nil {
+		return nil, err
+	}
+	if actor.Role != domain.RoleCoach || gym.CoachID != actor.ID {
+		return nil, domain.ErrForbidden
+	}
+	return s.gyms.ListGymAttendanceHistory(ctx, gymID, from, until)
+}
+func (s *GymService) MyAttendance(ctx context.Context, gymID string, actor *domain.User) ([]domain.GymAttendanceRecord, error) {
+	if actor.Role != domain.RoleAthlete {
+		return nil, domain.ErrForbidden
+	}
+	gyms, err := s.gyms.ListForAthlete(ctx, actor.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, gym := range gyms {
+		if gym.ID == gymID {
+			return s.gyms.ListAthleteGymAttendance(ctx, gymID, actor.ID)
+		}
+	}
+	return nil, domain.ErrForbidden
+}
 func validateGym(c *domain.Gym) error {
 	if strings.TrimSpace(c.Name) == "" || c.Province == "" || c.City == "" || c.Address == "" || c.Sport == "" || c.SportStyle == "" || len(c.ActiveWeekdays) == 0 || c.StartTime == "" || c.EndTime == "" || c.TuitionAmount < 0 || c.Capacity < 0 {
 		return domain.ErrInvalid

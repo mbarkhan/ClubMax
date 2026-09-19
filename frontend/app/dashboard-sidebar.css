@@ -1,12 +1,23 @@
 .mobile-dashboard-links,
 .mobile-menu-toggle,
-.mobile-bottom-nav,
 .mobile-nav-drawer,
 .mobile-drawer-backdrop {
   display: none;
 }
-.shell aside .identity b {
+.shell aside .mobile-bottom-nav {
+  display: none;
+}
+.shell aside .identity b,
+.shell aside .identity-profile-link {
   font-size: 14px;
+}
+.shell aside .identity-profile-link {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+.shell aside .identity-profile-link:hover {
+  color: #d9f67d;
 }
 .shell aside .identity span {
   font-size: 12px;
@@ -345,8 +356,11 @@
     display: grid;
     gap: 2px;
   }
-  .mobile-drawer-identity b {
+  .mobile-drawer-identity b,
+  .mobile-drawer-identity a {
+    color: inherit;
     font-size: 13px;
+    text-decoration: none;
   }
   .mobile-drawer-identity small {
     color: #718078;

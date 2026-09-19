@@ -8,6 +8,8 @@ import GymImageFields from "../../components/GymImageFields";
 import GymCover from "../../components/GymCover";
 import { Time24Field, TuitionAmountField } from "../../components/GymInputs";
 import "../../auth.css";
+import "../../attendance.css";
+import "../../attendance-overrides.css";
 const API = "",
   days = ["شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه"];
 type Gym = {
@@ -257,11 +259,25 @@ export default function Gyms() {
                 {role === "coach" && (
                   <div className="gym-card-actions">
                     <Link
+                      className="gym-card-attendance"
+                      href={`/${locale}/gyms/${g.id}/attendance`}
+                      title="حضور و غیاب"
+                    >
+                      حضور و غیاب
+                    </Link>
+                    <Link
                       href={`/${locale}/gyms/${g.id}/edit`}
                       aria-label={`ویرایش ${g.name}`}
                       title="ویرایش باشگاه"
                     >
                       ✎
+                    </Link>
+                  </div>
+                )}
+                {role === "athlete" && (
+                  <div className="gym-card-actions">
+                    <Link className="gym-card-attendance" href={`/${locale}/gyms/${g.id}/my-attendance`}>
+                      حضور و غیاب من
                     </Link>
                   </div>
                 )}

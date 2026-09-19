@@ -239,9 +239,9 @@ export default function DashboardSidebar({
             initials
           )}
         </div>
-        <b>
+        <Link className="identity-profile-link" href={`/${locale}/profile`}>
           {user.first_name} {user.last_name}
-        </b>
+        </Link>
         <span>{roleNames[user.role]}</span>
       </div>
       <nav>
@@ -273,7 +273,6 @@ export default function DashboardSidebar({
           user.role === "admin" ? "مدیریت تیکت‌ها" : "پشتیبانی و تیکت‌ها",
           "messages"
         )}
-        {item("profile", `/${locale}/profile`, "پروفایل من", "profile")}
       </nav>
       <button className="logout" onClick={logout}>
         خروج از حساب
@@ -326,9 +325,9 @@ export default function DashboardSidebar({
               {profileImage ? <img src={profileImage} alt="" /> : initials}
             </span>
             <div>
-              <b>
+              <Link href={`/${locale}/profile`} onClick={() => setMobileOpen(false)}>
                 {user.first_name} {user.last_name}
-              </b>
+              </Link>
               <small>{roleNames[user.role]}</small>
             </div>
           </div>
@@ -361,7 +360,6 @@ export default function DashboardSidebar({
             user.role === "admin" ? "مدیریت تیکت‌ها" : "پشتیبانی و تیکت",
             "messages"
           )}
-          {mobileItem("profile", `/${locale}/profile`, "پروفایل من", "profile")}
           <Link href={`/${locale}`} onClick={() => setMobileOpen(false)}>
             <NavIcon name="explore" />
             <span>صفحه اصلی سایت</span>

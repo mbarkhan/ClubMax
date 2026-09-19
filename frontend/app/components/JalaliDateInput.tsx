@@ -41,6 +41,9 @@ export default function JalaliDateInput({
   minYear = 1320,
   maxYear = 1450,
   initialValue = "",
+  onChange,
+  allowClear = true,
+  maxDate,
 }: {
   name: string;
   label?: string;
@@ -48,6 +51,9 @@ export default function JalaliDateInput({
   minYear?: number;
   maxYear?: number;
   initialValue?: string;
+  onChange?: (value: string) => void;
+  allowClear?: boolean;
+  maxDate?: string;
 }) {
   const today = useMemo(() => {
     const now = new Date();
@@ -94,6 +100,17 @@ export default function JalaliDateInput({
       setViewYear(year);
       setViewMonth(month);
     }
+  };
+  const selectDate = (value: JalaliValue | null) => {
+    setSelected(value);
+    if (!value) {
+      onChange?.("");
+      return;
+    }
+    const date = toGregorian(value.y, value.m, value.d);
+    const iso = `${date.gy}-${String(date.gm).padStart(2, "0")}-${String(date.gd).padStart(2, "0")}`;
+    if (maxDate && iso > maxDate) return;
+    onChange?.(iso);
   };
   return (
     <div className="jalali-field">
@@ -172,13 +189,18 @@ export default function JalaliDateInput({
                     <button
                       type="button"
                       key={day}
+                      disabled={(() => {
+                        if (!maxDate) return false;
+                        const date = toGregorian(viewYear, viewMonth, day);
+                        return `${date.gy}-${String(date.gm).padStart(2, "0")}-${String(date.gd).padStart(2, "0")}` > maxDate;
+                      })()}
                       className={
                         selected?.y === viewYear && selected.m === viewMonth && selected.d === day
                           ? "selected"
                           : ""
                       }
                       onClick={() => {
-                        setSelected({ y: viewYear, m: viewMonth, d: day });
+                        selectDate({ y: viewYear, m: viewMonth, d: day });
                         setOpen(false);
                       }}
                     >
@@ -190,20 +212,12 @@ export default function JalaliDateInput({
                 )}
               </div>
               <footer>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelected(null);
-                    setOpen(false);
-                  }}
-                >
-                  پاک کردن
-                </button>
+                {allowClear && <button type="button" onClick={() => { selectDate(null); setOpen(false); }}>پاک کردن</button>}
                 {today.jy >= minYear && today.jy <= maxYear && (
                   <button
                     type="button"
                     onClick={() => {
-                      setSelected({ y: today.jy, m: today.jm, d: today.jd });
+                      selectDate({ y: today.jy, m: today.jm, d: today.jd });
                       setViewYear(today.jy);
                       setViewMonth(today.jm);
                       setOpen(false);

@@ -138,6 +138,21 @@ type GymAthleteProfile struct {
 	UnpaidMonths      int       `json:"unpaid_months"`
 	OutstandingAmount int64     `json:"outstanding_amount"`
 	RegisteredAt      time.Time `json:"registered_at"`
+	LastWeightKG      *float64  `json:"last_weight_kg,omitempty"`
+}
+
+type GymAttendanceRecord struct {
+	AttendanceDate time.Time `json:"attendance_date"`
+	AthleteID      string    `json:"athlete_id"`
+	Present        bool      `json:"present"`
+}
+
+// GymAttendanceAthlete is a gym roster row annotated with attendance for one date.
+type GymAttendanceAthlete struct {
+	ID        string `json:"id"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Present   bool   `json:"present"`
 }
 
 type GymJoinRequestStatus string

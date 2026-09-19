@@ -49,6 +49,10 @@ type GymRepository interface {
 	ListAthleteJoinRequests(context.Context, string) ([]domain.GymJoinRequest, error)
 	ReviewJoinRequest(context.Context, string, string, domain.GymJoinRequestStatus, *string, int, int, time.Time) (*domain.GymJoinRequest, error)
 	ListGymAthletes(context.Context, string, int, int) ([]domain.GymAthleteProfile, error)
+	ListGymAttendance(context.Context, string, time.Time) ([]domain.GymAttendanceAthlete, error)
+	ListGymAttendanceHistory(context.Context, string, time.Time, time.Time) ([]domain.GymAttendanceRecord, error)
+	ListAthleteGymAttendance(context.Context, string, string) ([]domain.GymAttendanceRecord, error)
+	SetGymAttendance(context.Context, string, string, time.Time, bool, string) error
 	RemoveAthlete(context.Context, string, string) error
 	AddGymImage(context.Context, *domain.GymImage) error
 	GetGymImage(context.Context, string) (*domain.GymImage, error)

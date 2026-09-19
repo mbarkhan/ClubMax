@@ -121,6 +121,10 @@ func New(u *service.UserService, c *service.GymService, f *service.FinanceServic
 			r.Delete("/gyms/{id}/images/{imageID}", a.deleteGymImage)
 			r.With(requireRole(domain.RoleCoach, domain.RoleAdmin)).Post("/gyms/{id}/athletes/{athleteID}", a.addAthlete)
 			r.With(requireRole(domain.RoleCoach, domain.RoleAdmin)).Get("/gyms/{id}/athletes", a.gymAthletes)
+			r.With(requireRole(domain.RoleCoach)).Get("/gyms/{id}/attendance", a.gymAttendance)
+			r.With(requireRole(domain.RoleCoach)).Get("/gyms/{id}/attendance/history", a.gymAttendanceHistory)
+			r.With(requireRole(domain.RoleAthlete)).Get("/gyms/{id}/my-attendance", a.myGymAttendance)
+			r.With(requireRole(domain.RoleCoach), rateLimit(120, time.Minute)).Put("/gyms/{id}/attendance/{athleteID}", a.setGymAttendance)
 			r.With(requireRole(domain.RoleCoach)).Get("/gyms/{id}/athletes/{athleteID}/payments", a.gymAthletePayments)
 			r.Get("/messages", a.inbox)
 			r.Post("/messages", a.sendMessage)
@@ -752,6 +756,56 @@ func (a *API) addAthlete(w http.ResponseWriter, r *http.Request) {
 func (a *API) gymAthletes(w http.ResponseWriter, r *http.Request) {
 	v, e := a.gyms.Athletes(r.Context(), chi.URLParam(r, "id"), current(r))
 	respond(w, e, 200, v)
+}
+func attendanceDate(r *http.Request) (time.Time, error) {
+	date, err := time.Parse("2006-01-02", r.URL.Query().Get("date"))
+	if err != nil {
+		return time.Time{}, domain.InvalidField("date")
+	}
+	return date, nil
+}
+func (a *API) gymAttendance(w http.ResponseWriter, r *http.Request) {
+	date, err := attendanceDate(r)
+	if err != nil {
+		problem(w, err)
+		return
+	}
+	items, err := a.gyms.Attendance(r.Context(), chi.URLParam(r, "id"), date, current(r))
+	respond(w, err, http.StatusOK, items)
+}
+func (a *API) setGymAttendance(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Date    string `json:"date"`
+		Present bool   `json:"present"`
+	}
+	if decode(w, r, &body) != nil {
+		return
+	}
+	date, err := time.Parse("2006-01-02", body.Date)
+	if err != nil {
+		problem(w, domain.InvalidField("date"))
+		return
+	}
+	err = a.gyms.SetAttendance(r.Context(), chi.URLParam(r, "id"), chi.URLParam(r, "athleteID"), date, body.Present, current(r))
+	respond(w, err, http.StatusOK, map[string]bool{"present": body.Present})
+}
+func (a *API) gymAttendanceHistory(w http.ResponseWriter, r *http.Request) {
+	from, err := time.Parse("2006-01-02", r.URL.Query().Get("from"))
+	if err != nil {
+		problem(w, domain.InvalidField("from"))
+		return
+	}
+	until, err := time.Parse("2006-01-02", r.URL.Query().Get("until"))
+	if err != nil || !until.After(from) {
+		problem(w, domain.InvalidField("until"))
+		return
+	}
+	items, err := a.gyms.AttendanceHistory(r.Context(), chi.URLParam(r, "id"), from, until, current(r))
+	respond(w, err, http.StatusOK, items)
+}
+func (a *API) myGymAttendance(w http.ResponseWriter, r *http.Request) {
+	items, err := a.gyms.MyAttendance(r.Context(), chi.URLParam(r, "id"), current(r))
+	respond(w, err, http.StatusOK, items)
 }
 func (a *API) gymAthletePayments(w http.ResponseWriter, r *http.Request) {
 	payments, e := a.finance.GymAthletePayments(r.Context(), current(r).ID, chi.URLParam(r, "id"), chi.URLParam(r, "athleteID"))

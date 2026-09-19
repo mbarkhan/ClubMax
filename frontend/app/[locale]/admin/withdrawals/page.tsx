@@ -31,7 +31,8 @@ export default function WithdrawalsPage({ params }: { params: Promise<{ locale: 
   const { locale } = use(params),
     [items, setItems] = useState<Withdrawal[]>([]),
     [error, setError] = useState(""),
-    [working, setWorking] = useState("");
+    [working, setWorking] = useState(""),
+    [copiedIBAN, setCopiedIBAN] = useState("");
   const load = useCallback(
     () =>
       fetch(`${API}/v1/withdrawals`, {
@@ -80,6 +81,22 @@ export default function WithdrawalsPage({ params }: { params: Promise<{ locale: 
     load();
   };
   const pending = useMemo(() => items.filter((x) => x.status === "under_review").length, [items]);
+  const copyIBAN = async (item: Withdrawal) => {
+    try {
+      await navigator.clipboard.writeText(item.iban);
+    } catch {
+      const field = document.createElement("textarea");
+      field.value = item.iban;
+      field.style.position = "fixed";
+      field.style.opacity = "0";
+      document.body.appendChild(field);
+      field.select();
+      document.execCommand("copy");
+      field.remove();
+    }
+    setCopiedIBAN(item.id);
+    window.setTimeout(() => setCopiedIBAN((id) => (id === item.id ? "" : id)), 1800);
+  };
   return (
     <AdminShell
       locale={locale}
@@ -140,7 +157,21 @@ export default function WithdrawalsPage({ params }: { params: Promise<{ locale: 
                 <tr key={x.id}>
                   <td>
                     <strong>{x.coach_name}</strong>
-                    <small className="ltr">{x.iban}</small>
+                    <div className="iban-copy-row">
+                      <small className="ltr">{x.iban}</small>
+                      <button
+                        type="button"
+                        className="copy-iban-button"
+                        onClick={() => copyIBAN(x)}
+                        aria-label={`کپی شماره شبای ${x.coach_name}`}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <rect x="8" y="8" width="11" height="11" rx="2" />
+                          <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+                        </svg>
+                        <span>{copiedIBAN === x.id ? "کپی شد" : "کپی"}</span>
+                      </button>
+                    </div>
                   </td>
                   <td>
                     <strong className="money">{money(x.gross_amount)}</strong>

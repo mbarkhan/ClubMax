@@ -93,6 +93,17 @@ CREATE TABLE IF NOT EXISTS athlete_body_measurements (
 );
 CREATE INDEX IF NOT EXISTS athlete_body_measurements_history
  ON athlete_body_measurements(athlete_id,measured_at DESC);`},
+	{version: 8, name: "gym_attendance", sql: `
+CREATE TABLE IF NOT EXISTS gym_attendance (
+ gym_id uuid NOT NULL REFERENCES gyms(id) ON DELETE CASCADE,
+ athlete_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ attendance_date date NOT NULL,
+ recorded_by uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+ recorded_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(gym_id,athlete_id,attendance_date)
+);
+CREATE INDEX IF NOT EXISTS gym_attendance_gym_date ON gym_attendance(gym_id,attendance_date,athlete_id);
+CREATE INDEX IF NOT EXISTS gym_attendance_athlete_history ON gym_attendance(athlete_id,attendance_date DESC);`},
 }
 
 func runMigrations(ctx context.Context, pool *pgxpool.Pool) error {
